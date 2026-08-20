@@ -456,7 +456,7 @@
       100% { transform: scale(2.0); opacity: 0; }
     }
 
-    /* Camera Live Stream Modal */
+    /* กล้อง Live Camera Modal */
     #cameraModal {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: #000; z-index: 200000; display: none;
@@ -472,11 +472,6 @@
       align-items: center; justify-content: center; overflow: hidden;
     }
     #cameraVideo { width: 100%; height: 100%; object-fit: cover; }
-    .camera-scan-box {
-      position: absolute; width: 240px; height: 240px; border: 2.5px solid #10b981;
-      border-radius: 16px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); pointer-events: none;
-      display: none;
-    }
     .camera-controls {
       width: 100%; padding: 24px; display: flex; justify-content: space-around;
       align-items: center; background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
@@ -492,26 +487,58 @@
       padding: 10px 18px; border-radius: 20px; font-weight: 600; font-size: 13px;
       cursor: pointer; backdrop-filter: blur(8px);
     }
+
+    /* Modal เลือกวิธีแนบภาพครุภัณฑ์ */
+    #photoChoiceModal {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center;
+      z-index: 150000; padding: 16px;
+    }
+    .choice-box {
+      background: white; width: 100%; max-width: 320px; border-radius: 16px;
+      padding: 20px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+    }
+    .btn-choice-opt {
+      width: 100%; padding: 13px; margin: 6px 0; border: 1px solid #cbd5e1;
+      border-radius: 10px; background: #f8fafc; font-size: 14px; font-weight: 600;
+      cursor: pointer; color: var(--text-main); transition: 0.2s; display: flex;
+      align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-choice-opt:hover { background: #eff6ff; border-color: var(--primary); color: var(--primary); }
+    .btn-choice-opt.primary { background: var(--primary); color: white; border: none; }
   </style>
 </head>
 <body>
 
-  <!-- Camera Live Modal (เปิดกล้องถ่ายรูป & สแกน QR) -->
+  <!-- Modal สำหรับเลือกถ่ายสด หรือ เลือกจากคลังภาพ (เฉพาะภาพครุภัณฑ์) -->
+  <div id="photoChoiceModal">
+    <div class="choice-box">
+      <h3 style="font-size: 16px; margin-bottom: 14px; color: var(--text-main);">📷 แนบภาพถ่ายครุภัณฑ์</h3>
+      <button class="btn-choice-opt primary" onclick="openLiveCamera()">📸 เปิดกล้องสดเพื่อถ่ายภาพ</button>
+      <button class="btn-choice-opt" onclick="triggerFilePicker('photo')">📁 เลือกภาพจากคลังรูปภาพ</button>
+      <button class="btn-choice-opt" style="border: none; background: transparent; color: #64748b; margin-top: 4px;" onclick="closePhotoChoiceModal()">ยกเลิก</button>
+    </div>
+  </div>
+
+  <!-- Hidden File Input สำหรับเลือกจากคลังรูปภาพ -->
+  <input type="file" id="photoGalleryInput" accept="image/*" style="display: none;" onchange="handleDirectFileSelect(event, 'photo')" />
+  <input type="file" id="qrGalleryInput" accept="image/*" style="display: none;" onchange="handleDirectFileSelect(event, 'qr')" />
+
+  <!-- Camera Live Modal (เปิดกล้องถ่ายรูปสด) -->
   <div id="cameraModal">
     <div class="camera-header">
-      <div id="cameraTitle" style="font-weight: 700; font-size: 16px;">📷 ถ่ายภาพครุภัณฑ์</div>
+      <div style="font-weight: 700; font-size: 16px;">📷 ถ่ายภาพครุภัณฑ์</div>
       <button class="btn-camera-action" onclick="closeLiveCamera()">✕ ปิดกล้อง</button>
     </div>
     <div class="camera-video-container">
       <video id="cameraVideo" autoplay playsinline muted></video>
-      <div id="cameraScanBox" class="camera-scan-box"></div>
       <canvas id="cameraCanvas" style="display: none;"></canvas>
     </div>
     <div class="camera-controls">
       <button class="btn-camera-action" onclick="switchCamera()">🔄 สลับกล้อง</button>
-      <button id="btnTakePhoto" class="btn-capture-photo" onclick="captureLivePhoto()"></button>
-      <button class="btn-camera-action" onclick="document.getElementById('fallbackFileInput').click()">📁 เลือกไฟล์</button>
-      <input type="file" id="fallbackFileInput" accept="image/*" style="display: none;" onchange="handleFallbackFile(event)">
+      <button class="btn-capture-photo" onclick="captureLivePhoto()"></button>
+      <button class="btn-camera-action" onclick="triggerFilePicker('photo'); closeLiveCamera();">📁 คลังภาพ</button>
     </div>
   </div>
 
@@ -636,11 +663,11 @@
           <input type="text" id="plotLocation" class="form-control" placeholder="เช่น สวนจตุจักร เขตจตุจักร" />
         </div>
 
-        <!-- กล่องเปิดกล้องถ่ายภาพ และ สแกน QR Code สด -->
+        <!-- กล่องภาพครุภัณฑ์ (เปิดกล้อง/เลือกคลัง) & กล่อง QR Code (เลือกจากคลังภาพเท่านั้น) -->
         <div class="media-upload-grid">
-          <div class="photo-upload-box" onclick="openLiveCamera('photo')">
+          <div class="photo-upload-box" onclick="showPhotoChoiceModal()">
             <div id="photoPlaceholderText" style="font-size: 11.5px; color: var(--text-sub); padding: 14px 4px;">
-              📷 <b>เปิดกล้องถ่ายรูป</b><br><span style="font-size: 10px; color: var(--primary);">(แตะเพื่อเปิดกล้องสด)</span>
+              📷 <b>รูปครุภัณฑ์</b><br><span style="font-size: 10px; color: var(--primary);">(ถ่ายสด หรือ คลังภาพ)</span>
             </div>
             <div id="photoPreviewWrap" class="photo-preview-wrap-3-4">
               <img id="photoPreviewImg" class="photo-preview-img-3-4" src="" alt="preview" />
@@ -648,9 +675,9 @@
             </div>
           </div>
 
-          <div class="photo-upload-box" onclick="openLiveCamera('qr')">
+          <div class="photo-upload-box" onclick="triggerFilePicker('qr')">
             <div id="qrPlaceholderText" style="font-size: 11.5px; color: var(--text-sub); padding: 14px 4px;">
-              📱 <b>สแกน / ถ่าย QR</b><br><span style="font-size: 10px; color: var(--success);">(แตะเพื่อเปิดกล้องสแกน)</span>
+              📱 <b>ภาพ QR Code</b><br><span style="font-size: 10px; color: var(--success);">(เลือกจากคลังภาพ)</span>
             </div>
             <div id="qrPreviewWrap" class="photo-preview-wrap-3-4">
               <img id="qrPreviewImg" class="photo-preview-img-3-4" src="" alt="qr preview" />
@@ -744,13 +771,12 @@
   
   <div id="toast"></div>
 
-  <!-- Leaflet & Camera Libraries -->
+  <!-- Leaflet Libraries -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
   <script>
     // *************************************************************************
@@ -783,168 +809,46 @@
     var inspectorAnimationId = null;
     var isInspectorActive = false;
 
-    // ระบบจัดการกล้องสด Live Camera & Scanner
+    // ระบบกล้องสด
     var currentMediaStream = null;
-    var currentCameraMode = 'photo'; // 'photo' หรือ 'qr'
-    var currentFacingMode = 'environment'; // 'environment' (กล้องหลัง) หรือ 'user' (กล้องหน้า)
-    var qrScanAnimationId = null;
+    var currentFacingMode = 'environment';
 
     var INITIAL_CENTER = [13.7563, 100.5018];
     var INITIAL_ZOOM = 13;
 
     /* ============================================================
-       ระบบเปิดกล้องถ่ายภาพสด & สแกน QR CODE (Camera API)
+       ฟังก์ชันจัดการรูปภาพ และ กล้องถ่ายภาพสด
        ============================================================ */
-    async function openLiveCamera(mode) {
-      currentCameraMode = mode;
-      document.getElementById('cameraModal').style.display = 'flex';
-      
-      const scanBox = document.getElementById('cameraScanBox');
-      const title = document.getElementById('cameraTitle');
-      const btnTakePhoto = document.getElementById('btnTakePhoto');
-
-      if (mode === 'qr') {
-        title.innerHTML = '📱 สแกน QR Code ครุภัณฑ์';
-        scanBox.style.display = 'block';
-        btnTakePhoto.style.display = 'none';
-      } else {
-        title.innerHTML = '📷 ถ่ายรูปครุภัณฑ์ (สัดส่วน 3:4)';
-        scanBox.style.display = 'none';
-        btnTakePhoto.style.display = 'block';
-      }
-
-      await startCameraStream();
+    function showPhotoChoiceModal() {
+      document.getElementById('photoChoiceModal').style.display = 'flex';
     }
 
-    async function startCameraStream() {
-      if (currentMediaStream) {
-        currentMediaStream.getTracks().forEach(track => track.stop());
-      }
+    function closePhotoChoiceModal() {
+      document.getElementById('photoChoiceModal').style.display = 'none';
+    }
 
-      try {
-        const constraints = {
-          video: {
-            facingMode: currentFacingMode,
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        currentMediaStream = stream;
-        const video = document.getElementById('cameraVideo');
-        video.srcObject = stream;
-        video.setAttribute('playsinline', true);
-        await video.play();
-
-        if (currentCameraMode === 'qr') {
-          startQrScanningLoop();
-        }
-      } catch (err) {
-        showCustomerAlert('ไม่สามารถเปิดกล้องได้', 'กรุณาอนุญาตให้เข้าถึงกล้องถ่ายภาพ หรือเลือกไฟล์รูปภาพแทน', 'warning');
-        closeLiveCamera();
+    function triggerFilePicker(type) {
+      closePhotoChoiceModal();
+      if (type === 'photo') {
+        document.getElementById('photoGalleryInput').click();
+      } else if (type === 'qr') {
+        document.getElementById('qrGalleryInput').click();
       }
     }
 
-    function switchCamera() {
-      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
-      startCameraStream();
-    }
-
-    function closeLiveCamera() {
-      if (qrScanAnimationId) {
-        cancelAnimationFrame(qrScanAnimationId);
-        qrScanAnimationId = null;
-      }
-      if (currentMediaStream) {
-        currentMediaStream.getTracks().forEach(track => track.stop());
-        currentMediaStream = null;
-      }
-      document.getElementById('cameraModal').style.display = 'none';
-    }
-
-    function captureLivePhoto() {
-      const video = document.getElementById('cameraVideo');
-      const canvas = document.getElementById('cameraCanvas');
-      const ctx = canvas.getContext('2d');
-
-      const maxW = 900, maxH = 1200;
-      let w = video.videoWidth;
-      let h = video.videoHeight;
-
-      if (w > maxW || h > maxH) {
-        if (w / h > maxW / maxH) {
-          h = Math.round(h * maxW / w);
-          w = maxW;
-        } else {
-          w = Math.round(w * maxH / h);
-          h = maxH;
-        }
-      }
-
-      canvas.width = w;
-      canvas.height = h;
-      ctx.drawImage(video, 0, 0, w, h);
-
-      const base64 = canvas.toDataURL('image/jpeg', 0.8);
-
-      if (currentCameraMode === 'photo') {
-        selectedBase64Image = base64;
-        document.getElementById('photoPreviewImg').src = base64;
-        document.getElementById('photoPreviewWrap').style.display = 'block';
-        document.getElementById('photoPlaceholderText').style.display = 'none';
-      } else {
-        selectedBase64Qr = base64;
-        document.getElementById('qrPreviewImg').src = base64;
-        document.getElementById('qrPreviewWrap').style.display = 'block';
-        document.getElementById('qrPlaceholderText').style.display = 'none';
-      }
-
-      closeLiveCamera();
-      showToast('บันทึกรูปภาพเรียบร้อย');
-    }
-
-    function startQrScanningLoop() {
-      const video = document.getElementById('cameraVideo');
-      const canvas = document.getElementById('cameraCanvas');
-      const ctx = canvas.getContext('2d');
-
-      function scan() {
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "dontInvert",
-          });
-
-          if (code) {
-            // จับภาพรูป QR ไว้เป็นหลักฐาน
-            captureLivePhoto();
-            
-            // นำผลลัพธ์ของ QR Code กรอกลงในเลขทะเบียนทรัพย์สิน
-            if (code.data) {
-              document.getElementById('plotRegNo').value = code.data;
-              showToast('สแกนสำเร็จ: ' + code.data);
-            }
-            return;
-          }
-        }
-        qrScanAnimationId = requestAnimationFrame(scan);
-      }
-      qrScanAnimationId = requestAnimationFrame(scan);
-    }
-
-    function handleFallbackFile(event) {
+    // จัดการเลือกไฟล์จากคลังภาพ (Gallery)
+    function handleDirectFileSelect(event, type) {
       const file = event.target.files[0];
       if (!file) return;
+      processImageFile(file, type);
+    }
+
+    function processImageFile(file, type) {
       const reader = new FileReader();
       reader.onload = function(e) {
         const img = new Image();
         img.onload = function() {
-          const canvas = document.getElementById('cameraCanvas');
+          const canvas = document.createElement('canvas');
           const maxW = 900, maxH = 1200;
           let w = img.width, h = img.height;
           if (w > maxW || h > maxH) {
@@ -961,22 +865,93 @@
           ctx.drawImage(img, 0, 0, w, h);
           const base64 = canvas.toDataURL('image/jpeg', 0.75);
 
-          if (currentCameraMode === 'photo') {
+          if (type === 'photo') {
             selectedBase64Image = base64;
             document.getElementById('photoPreviewImg').src = base64;
             document.getElementById('photoPreviewWrap').style.display = 'block';
             document.getElementById('photoPlaceholderText').style.display = 'none';
-          } else {
+            showToast('เลือกภาพครุภัณฑ์เรียบร้อย');
+          } else if (type === 'qr') {
             selectedBase64Qr = base64;
             document.getElementById('qrPreviewImg').src = base64;
             document.getElementById('qrPreviewWrap').style.display = 'block';
             document.getElementById('qrPlaceholderText').style.display = 'none';
+            showToast('เลือกภาพ QR Code เรียบร้อย');
           }
-          closeLiveCamera();
         };
         img.src = e.target.result;
       };
       reader.readAsDataURL(file);
+    }
+
+    // เปิดกล้องสด (Live Camera)
+    async function openLiveCamera() {
+      closePhotoChoiceModal();
+      document.getElementById('cameraModal').style.display = 'flex';
+      await startCameraStream();
+    }
+
+    async function startCameraStream() {
+      if (currentMediaStream) {
+        currentMediaStream.getTracks().forEach(track => track.stop());
+      }
+      try {
+        const constraints = {
+          video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentMediaStream = stream;
+        const video = document.getElementById('cameraVideo');
+        video.srcObject = stream;
+        video.setAttribute('playsinline', true);
+        await video.play();
+      } catch (err) {
+        showCustomerAlert('ไม่สามารถเปิดกล้องได้', 'กรุณาอนุญาตการเข้าถึงกล้อง หรือเลือกภาพจากคลังรูปภาพ', 'warning');
+        closeLiveCamera();
+      }
+    }
+
+    function switchCamera() {
+      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+      startCameraStream();
+    }
+
+    function closeLiveCamera() {
+      if (currentMediaStream) {
+        currentMediaStream.getTracks().forEach(track => track.stop());
+        currentMediaStream = null;
+      }
+      document.getElementById('cameraModal').style.display = 'none';
+    }
+
+    function captureLivePhoto() {
+      const video = document.getElementById('cameraVideo');
+      const canvas = document.getElementById('cameraCanvas');
+      const ctx = canvas.getContext('2d');
+
+      const maxW = 900, maxH = 1200;
+      let w = video.videoWidth, h = video.videoHeight;
+      if (w > maxW || h > maxH) {
+        if (w / h > maxW / maxH) {
+          h = Math.round(h * maxW / w);
+          w = maxW;
+        } else {
+          w = Math.round(w * maxH / h);
+          h = maxH;
+        }
+      }
+      canvas.width = w; canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+      const base64 = canvas.toDataURL('image/jpeg', 0.8);
+
+      selectedBase64Image = base64;
+      document.getElementById('photoPreviewImg').src = base64;
+      document.getElementById('photoPreviewWrap').style.display = 'block';
+      document.getElementById('photoPlaceholderText').style.display = 'none';
+
+      closeLiveCamera();
+      showToast('ถ่ายภาพครุภัณฑ์เรียบร้อย');
     }
 
     // ระบบเชื่อมต่อ API ผ่าน Fetch
@@ -1272,12 +1247,14 @@
       if (type === 'photo') {
         selectedBase64Image = '';
         document.getElementById('currentExistingImageUrl').value = '';
+        document.getElementById('photoGalleryInput').value = '';
         document.getElementById('photoPreviewImg').src = '';
         document.getElementById('photoPreviewWrap').style.display = 'none';
         document.getElementById('photoPlaceholderText').style.display = 'block';
       } else if (type === 'qr') {
         selectedBase64Qr = '';
         document.getElementById('currentExistingQrUrl').value = '';
+        document.getElementById('qrGalleryInput').value = '';
         document.getElementById('qrPreviewImg').src = '';
         document.getElementById('qrPreviewWrap').style.display = 'none';
         document.getElementById('qrPlaceholderText').style.display = 'block';
