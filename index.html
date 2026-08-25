@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>ระบบเก็บพิกัดและข้อมูลครุภัณฑ์</title>
   
-  <!-- Favicon SVG หมุดพิกัด -->
+  <!-- Favicon SVG รูปหมุดพิกัด -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 48'%3E%3Cpath d='M19 0C8.5 0 0 8.5 0 19c0 13.5 19 29 19 29s19-15.5 19-29C38 8.5 29.5 0 19 0z' fill='%231a73e8' stroke='%23ffffff' stroke-width='2'/%3E%3Ccircle cx='19' cy='18' r='10' fill='%23ffffff'/%3E%3Cpath d='M20 9l-7 10h6l-2 8 8-10h-6l1-8z' fill='%231a73e8'/%3E%3C/svg%3E">
 
   <!-- Leaflet, MarkerCluster & Leaflet Draw CSS -->
@@ -19,7 +19,7 @@
 </head>
 <body>
 
-  <!-- Modal เลือกวิธีแนบภาพครุภัณฑ์ -->
+  <!-- Modal สำหรับเลือกถ่ายสด หรือ เลือกจากคลังภาพ (เฉพาะภาพครุภัณฑ์) -->
   <div id="photoChoiceModal">
     <div class="choice-box">
       <h3 style="font-size: 16px; margin-bottom: 14px; color: var(--text-main);">📷 แนบภาพถ่ายครุภัณฑ์</h3>
@@ -29,13 +29,20 @@
     </div>
   </div>
 
-  <!-- แผงควบคุมภาพแผนผังซ้อนทับ -->
+  <!-- แผงควบคุมภาพแผนผังซ้อนทับ (Free Drag & Lock Enabled) -->
   <div id="blueprintControlCard">
     <div class="bp-ctrl-header">
-      <span>📐 แผงปรับตำแหน่งภาพแผนผัง</span>
-      <button onclick="toggleBlueprintCard(false)" style="border:none;background:none;font-weight:bold;cursor:pointer;color:#94a3b8;">✕</button>
+      <span>📐 แผงควบคุมภาพแผนผัง</span>
+      <button onclick="toggleBlueprintCard(false)" style="border:none;background:none;font-weight:bold;cursor:pointer;color:#94a3b8;font-size:14px;">✕</button>
     </div>
-    
+
+    <!-- สวิตช์ล็อก/ปลดล็อกตำแหน่ง -->
+    <div style="margin-bottom: 10px;">
+      <button id="btnLockBlueprint" class="btn-choice-opt primary" style="padding: 7px 10px; font-size: 12px; justify-content: center;" onclick="toggleLockBlueprint()">
+        🔓 สถานะ: ปลดล็อก (ลากย้ายได้)
+      </button>
+    </div>
+
     <div class="bp-slider-group">
       <label>ความโปร่งใส/คมชัด: <span id="bpOpacityVal">70%</span></label>
       <input type="range" class="bp-slider" id="bpOpacityRange" min="10" max="100" value="70" oninput="updateBlueprintTransform()">
@@ -43,7 +50,7 @@
 
     <div class="bp-slider-group">
       <label>ปรับขนาดภาพ (Scale): <span id="bpScaleVal">100%</span></label>
-      <input type="range" class="bp-slider" id="bpScaleRange" min="20" max="300" value="100" oninput="updateBlueprintTransform()">
+      <input type="range" class="bp-slider" id="bpScaleRange" min="20" max="400" value="100" oninput="updateBlueprintTransform()">
     </div>
 
     <div class="bp-slider-group">
@@ -52,22 +59,36 @@
     </div>
 
     <div class="bp-slider-group">
-      <label>ปรับสัดส่วน กว้าง x สูง: <span id="bpAspectVal">1.0</span></label>
-      <input type="range" class="bp-slider" id="bpAspectRange" min="0.5" max="2.0" step="0.05" value="1.0" oninput="updateBlueprintTransform()">
+      <label>สัดส่วน กว้าง x สูง: <span id="bpAspectVal">1.0</span></label>
+      <input type="range" class="bp-slider" id="bpAspectRange" min="0.4" max="2.5" step="0.05" value="1.0" oninput="updateBlueprintTransform()">
     </div>
 
-    <div class="bp-btn-grid">
+    <!-- ปุ่มเลื่อนพิกัดละเอียด 4 ทิศทาง -->
+    <div style="margin-top: 8px;">
+      <label style="display:block; margin-bottom:4px; font-weight:600; color:var(--text-sub);">เลื่อนละเอียด (Nudge):</label>
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:4px; max-width: 150px; margin: 0 auto;">
+        <div></div>
+        <button class="btn-choice-opt" style="padding:4px; margin:0;" onclick="nudgeBlueprint(0, 1)">⬆️</button>
+        <div></div>
+        <button class="btn-choice-opt" style="padding:4px; margin:0;" onclick="nudgeBlueprint(-1, 0)">⬅️</button>
+        <button class="btn-choice-opt" style="padding:4px; margin:0;" onclick="nudgeBlueprint(0, -1)">⬇️</button>
+        <button class="btn-choice-opt" style="padding:4px; margin:0;" onclick="nudgeBlueprint(1, 0)">➡️</button>
+      </div>
+    </div>
+
+    <div class="bp-btn-grid" style="margin-top: 10px;">
       <button class="btn-choice-opt" style="padding: 6px; font-size: 11px;" onclick="resetBlueprintTransform()">🔄 รีเซ็ตภาพ</button>
-      <button class="btn-choice-opt primary" style="padding: 6px; font-size: 11px;" onclick="removeBlueprintOverlay()">🗑️ ลบแผนผัง</button>
+      <button class="btn-choice-opt" style="padding: 6px; font-size: 11px; color:#ef4444; border-color:#fecaca;" onclick="removeBlueprintOverlay()">🗑️ ลบแผนผัง</button>
     </div>
   </div>
 
-  <!-- File Inputs -->
+  <!-- Native File Inputs สำหรับมือถือ -->
   <input type="file" id="photoCameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleDirectFileSelect(event, 'photo')" />
   <input type="file" id="photoGalleryInput" accept="image/*" style="display: none;" onchange="handleDirectFileSelect(event, 'photo')" />
   <input type="file" id="qrGalleryInput" accept="image/*" style="display: none;" onchange="handleDirectFileSelect(event, 'qr')" />
   <input type="file" id="blueprintFileInput" accept="image/*" style="display: none;" onchange="handleBlueprintFile(event)" />
 
+  <!-- Dialog แจ้งเตือนของระบบ -->
   <div id="customAlertOverlay">
     <div class="custom-alert-box">
       <div id="customAlertIcon" class="custom-alert-icon">🔔</div>
@@ -80,6 +101,7 @@
     </div>
   </div>
 
+  <!-- Modal เข้าสู่ระบบ -->
   <div id="loginModal">
     <div class="login-box">
       <button class="btn-close-modal" onclick="closeLoginModal()">✕</button>
@@ -93,10 +115,12 @@
     </div>
   </div>
 
+  <!-- ปุ่มเปิด Sidebar บนมือถือ -->
   <button id="mobileToggleBtn" onclick="toggleMobileSidebar()">
     <span id="toggleIcon">📝</span> <span id="toggleText">เปิดฟอร์มบันทึก</span>
   </button>
 
+  <!-- แผงด้านข้าง (Sidebar) -->
   <div id="sidebar">
     <div class="sheet-handle" onclick="toggleMobileSidebar()"></div>
     <div class="header">
@@ -114,6 +138,7 @@
         <button class="btn-action btn-gps" onclick="locateUser(true)">GPS</button>
       </div>
 
+      <!-- แผงควบคุมระบบสำหรับ Admin -->
       <div id="adminControlCard" class="admin-control-card">
         <div class="admin-control-header">
           <span>⚙️ แผงควบคุมระบบ (Admin)</span>
@@ -137,6 +162,7 @@
         <button class="btn-banner-login" onclick="openLoginModal()">🔐 เข้าสู่ระบบเจ้าหน้าที่</button>
       </div>
 
+      <!-- ฟอร์มบันทึกข้อมูล -->
       <div id="formCard" class="card" style="display: none;">
         <div class="card-title">
           <span id="formTitle">ข้อมูลรายการใหม่</span>
@@ -179,6 +205,7 @@
           <input type="text" id="plotName" class="form-control" placeholder="เช่น โคมไฟส่องสว่าง / เสาไฟโซลาร์เซลล์" />
         </div>
 
+        <!-- ตัวเลือกสีหมุด 5 สี -->
         <div class="form-group">
           <label>🎨 เลือกสีหมุดแสดงผล (5 สี)</label>
           <div class="color-picker-grid">
@@ -220,6 +247,7 @@
           <input type="text" id="plotLocation" class="form-control" placeholder="เช่น สวนจตุจักร เขตจตุจักร" />
         </div>
 
+        <!-- กล่องภาพครุภัณฑ์ & กล่อง QR Code -->
         <div class="media-upload-grid">
           <div class="photo-upload-box" onclick="showPhotoChoiceModal()">
             <div id="photoPlaceholderText" style="font-size: 11.5px; color: var(--text-sub); padding: 14px 4px;">
@@ -259,6 +287,7 @@
         <button id="cancelEditBtn" class="btn-cancel" style="display: none;" onclick="cancelEditMode()">ยกเลิกการแก้ไข</button>
       </div>
 
+      <!-- ตัวกรองข้อมูล -->
       <div class="filter-card">
         <div class="filter-title">
           <span>🔍 ตัวกรองการแสดงผลข้อมูล</span>
@@ -280,6 +309,7 @@
         </div>
       </div>
 
+      <!-- ป้ายสรุปสถิติ -->
       <div class="stats-container">
         <div class="stat-badge total">
           <div id="statTotal" class="stat-val total">0</div>
@@ -295,11 +325,13 @@
         </div>
       </div>
 
+      <!-- แถบส่งออกข้อมูล -->
       <div class="export-bar">
         <button class="btn-export" onclick="exportFilteredData('csv')">📊 ส่งออก Excel (CSV)</button>
         <button class="btn-export" onclick="exportFilteredData('geojson')">🗺️ ส่งออก GeoJSON</button>
       </div>
 
+      <!-- รายการข้อมูลที่บันทึกไว้ -->
       <div class="list-header">
         <span>รายการที่บันทึกไว้</span>
         <span id="recordCount" style="font-size: 12px; color: var(--primary); font-weight: 700;">(0 รายการ)</span>
@@ -314,6 +346,7 @@
     </div>
   </div>
 
+  <!-- แผนที่ Leaflet -->
   <div id="map">
     <div id="centerCrosshair">
       <div class="crosshair-pulse"></div>
