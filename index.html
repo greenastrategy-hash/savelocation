@@ -234,8 +234,24 @@
       font-size: 13.5px; background: white; outline: none;
     }
     .form-control:focus { border-color: var(--primary); }
-    .radio-group { display: flex; gap: 24px; font-size: 14px; margin-top: 6px; color: var(--text-main); }
+    .radio-group { display: flex; gap: 14px; font-size: 13.5px; margin-top: 6px; color: var(--text-main); flex-wrap: wrap; }
     
+    /* 5-Color Selector Palette */
+    .color-picker-grid {
+      display: flex; gap: 8px; margin-top: 6px; align-items: center;
+    }
+    .color-opt-label {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 6px 4px; border: 1.5px solid #cbd5e1; border-radius: 8px; cursor: pointer;
+      font-size: 11px; font-weight: 600; transition: 0.2s; background: white;
+    }
+    .color-opt-label input { display: none; }
+    .color-dot { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .color-opt-label.selected {
+      border-color: var(--primary); background: #eff6ff; color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+    }
+
     .media-upload-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;
     }
@@ -456,7 +472,6 @@
       100% { transform: scale(2.0); opacity: 0; }
     }
 
-    /* Modal เลือกวิธีแนบภาพครุภัณฑ์ */
     #photoChoiceModal {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(6px);
@@ -475,6 +490,20 @@
     }
     .btn-choice-opt:hover { background: #eff6ff; border-color: var(--primary); color: var(--primary); }
     .btn-choice-opt.primary { background: var(--primary); color: white; border: none; }
+
+    /* Blueprint Overlay Control Floating Drawer */
+    #blueprintControlCard {
+      position: fixed; bottom: 85px; right: 14px; width: 320px; max-width: 90vw;
+      background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(8px);
+      border: 1.5px solid var(--border); border-radius: 14px; padding: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25); z-index: 5000; display: none;
+      font-size: 12px;
+    }
+    .bp-ctrl-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: 700; color: var(--primary); font-size: 13px; }
+    .bp-slider-group { margin-bottom: 8px; }
+    .bp-slider-group label { display: flex; justify-content: space-between; margin-bottom: 3px; color: var(--text-sub); font-weight: 600; }
+    .bp-slider { width: 100%; height: 5px; border-radius: 4px; accent-color: var(--primary); cursor: pointer; }
+    .bp-btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -489,10 +518,44 @@
     </div>
   </div>
 
-  <!-- Native File Inputs สำหรับมือถือ (เปิดกล้องสด / เปิดคลังภาพ) -->
+  <!-- แผงควบคุมภาพแผนผังซ้อนทับ (Blueprint Overlay Tool) -->
+  <div id="blueprintControlCard">
+    <div class="bp-ctrl-header">
+      <span>📐 แผงปรับตำแหน่งภาพแผนผัง</span>
+      <button onclick="toggleBlueprintCard(false)" style="border:none;background:none;font-weight:bold;cursor:pointer;color:#94a3b8;">✕</button>
+    </div>
+    
+    <div class="bp-slider-group">
+      <label>ความโปร่งใส/คมชัด: <span id="bpOpacityVal">70%</span></label>
+      <input type="range" class="bp-slider" id="bpOpacityRange" min="10" max="100" value="70" oninput="updateBlueprintTransform()">
+    </div>
+
+    <div class="bp-slider-group">
+      <label>ปรับขนาดภาพ (Scale): <span id="bpScaleVal">100%</span></label>
+      <input type="range" class="bp-slider" id="bpScaleRange" min="20" max="300" value="100" oninput="updateBlueprintTransform()">
+    </div>
+
+    <div class="bp-slider-group">
+      <label>ความลาดเอียง/การหมุน (Rotate): <span id="bpRotateVal">0°</span></label>
+      <input type="range" class="bp-slider" id="bpRotateRange" min="0" max="360" value="0" oninput="updateBlueprintTransform()">
+    </div>
+
+    <div class="bp-slider-group">
+      <label>ปรับสัดส่วน กว้าง x สูง: <span id="bpAspectVal">1.0</span></label>
+      <input type="range" class="bp-slider" id="bpAspectRange" min="0.5" max="2.0" step="0.05" value="1.0" oninput="updateBlueprintTransform()">
+    </div>
+
+    <div class="bp-btn-grid">
+      <button class="btn-choice-opt" style="padding: 6px; font-size: 11px;" onclick="resetBlueprintTransform()">🔄 รีเซ็ตภาพ</button>
+      <button class="btn-choice-opt primary" style="padding: 6px; font-size: 11px;" onclick="removeBlueprintOverlay()">🗑️ ลบแผนผัง</button>
+    </div>
+  </div>
+
+  <!-- Native File Inputs สำหรับมือถือ (เปิดกล้องสด / เปิดคลังภาพ / แทรกแผนผัง) -->
   <input type="file" id="photoCameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleDirectFileSelect(event, 'photo')" />
   <input type="file" id="photoGalleryInput" accept="image/*" style="display: none;" onchange="handleDirectFileSelect(event, 'photo')" />
   <input type="file" id="qrGalleryInput" accept="image/*" style="display: none;" onchange="handleDirectFileSelect(event, 'qr')" />
+  <input type="file" id="blueprintFileInput" accept="image/*" style="display: none;" onchange="handleBlueprintFile(event)" />
 
   <div id="customAlertOverlay">
     <div class="custom-alert-box">
@@ -605,6 +668,38 @@
           <input type="text" id="plotName" class="form-control" placeholder="เช่น โคมไฟส่องสว่าง / เสาไฟโซลาร์เซลล์" />
         </div>
 
+        <!-- ตัวเลือกสีหมุด 5 สี -->
+        <div class="form-group">
+          <label>🎨 เลือกสีหมุดแสดงผล (5 สี)</label>
+          <div class="color-picker-grid">
+            <label class="color-opt-label selected" id="lblColorGreen" onclick="selectPinColor('green')">
+              <input type="radio" name="pinColorSelect" value="green" checked />
+              <div class="color-dot" style="background: #10b981;"></div>
+              <span>เขียว</span>
+            </label>
+            <label class="color-opt-label" id="lblColorRed" onclick="selectPinColor('red')">
+              <input type="radio" name="pinColorSelect" value="red" />
+              <div class="color-dot" style="background: #ef4444;"></div>
+              <span>แดง</span>
+            </label>
+            <label class="color-opt-label" id="lblColorBlue" onclick="selectPinColor('blue')">
+              <input type="radio" name="pinColorSelect" value="blue" />
+              <div class="color-dot" style="background: #0284c7;"></div>
+              <span>น้ำเงิน</span>
+            </label>
+            <label class="color-opt-label" id="lblColorYellow" onclick="selectPinColor('yellow')">
+              <input type="radio" name="pinColorSelect" value="yellow" />
+              <div class="color-dot" style="background: #f59e0b;"></div>
+              <span>เหลือง</span>
+            </label>
+            <label class="color-opt-label" id="lblColorPurple" onclick="selectPinColor('purple')">
+              <input type="radio" name="pinColorSelect" value="purple" />
+              <div class="color-dot" style="background: #8b5cf6;"></div>
+              <span>ม่วง</span>
+            </label>
+          </div>
+        </div>
+
         <div class="form-group">
           <label>เลขทะเบียนทรัพย์สิน</label>
           <input type="text" id="plotRegNo" class="form-control" placeholder="เช่น นร.0601/2567-001" />
@@ -615,7 +710,6 @@
           <input type="text" id="plotLocation" class="form-control" placeholder="เช่น สวนจตุจักร เขตจตุจักร" />
         </div>
 
-        <!-- กล่องภาพครุภัณฑ์ (เปิดกล้อง/เลือกคลัง) & กล่อง QR Code (เลือกจากคลังภาพเท่านั้น) -->
         <div class="media-upload-grid">
           <div class="photo-upload-box" onclick="showPhotoChoiceModal()">
             <div id="photoPlaceholderText" style="font-size: 11.5px; color: var(--text-sub); padding: 14px 4px;">
@@ -734,7 +828,7 @@
     // *************************************************************************
     // วาง Web App URL จาก Google Apps Script ที่นี่
     // *************************************************************************
-    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbywT3ywXN_8AzgDkxu84NmptcParoG5b_8EXNKceCvGWwTSKUJ2YyC4ApCeFkzvGMr3/exec';
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbw9W3WvKq1t4bF6D-N0GqE4jT3Iqf0A0x2/exec';
 
     var currentSession = null;
     var map, drawControl, drawnItems, existingLayerGroup, gpsMarkerGroup;
@@ -755,17 +849,171 @@
     var selectedBase64Image = '';
     var selectedBase64Qr = '';
     var customAlertCallback = null;
+    var selectedPinColor = 'green';
 
     var inspectorMarker = null;
     var inspectorPathLine = null;
     var inspectorAnimationId = null;
     var isInspectorActive = false;
 
+    // ตัวแปรสำหรับระบบภาพแผนผังซ้อนทับ (Blueprint Image Overlay)
+    var blueprintLayer = null;
+    var blueprintImageSrc = '';
+    var blueprintCenter = null;
+    var blueprintWidthMeters = 120;
+    var blueprintHeightMeters = 80;
+
     var INITIAL_CENTER = [13.7563, 100.5018];
     var INITIAL_ZOOM = 13;
 
     /* ============================================================
-       ฟังก์ชันจัดการรูปภาพ และ กล้องถ่ายภาพสด
+       ระบบสร้างไอคอนหมุด 5 สี
+       ============================================================ */
+    function selectPinColor(colorKey) {
+      selectedPinColor = colorKey;
+      var labels = document.querySelectorAll('.color-opt-label');
+      labels.forEach(l => l.classList.remove('selected'));
+      var targetLbl = document.getElementById('lblColor' + colorKey.charAt(0).toUpperCase() + colorKey.slice(1));
+      if (targetLbl) targetLbl.classList.add('selected');
+
+      if (currentLayer && currentFeatureData && currentFeatureData.type === 'หมุดตำแหน่งครุภัณฑ์') {
+        currentLayer.setIcon(createSvgIcon(colorKey, false));
+      }
+    }
+
+    function createSvgIcon(colorType, animate) {
+      var colorMap = {
+        'green':  { main: '#10b981', inner: '#059669' },
+        'red':    { main: '#ef4444', inner: '#b91c1c' },
+        'blue':   { main: '#0284c7', inner: '#0369a1' },
+        'yellow': { main: '#f59e0b', inner: '#d97706' },
+        'purple': { main: '#8b5cf6', inner: '#7c3aed' },
+        'ปกติ':    { main: '#10b981', inner: '#059669' },
+        'ชำรุด':   { main: '#ef4444', inner: '#b91c1c' }
+      };
+
+      var selected = colorMap[colorType] || colorMap['green'];
+      var mainColor = selected.main;
+      var innerCircle = selected.inner;
+
+      var svgHtml = 
+        '<div style="width:26px; height:34px;">' +
+          '<svg width="26" height="34" viewBox="0 0 38 48" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+            '<path d="M19 0C8.506 0 0 8.506 0 19C0 32.5 19 48 19 48C19 48 38 32.5 38 19C38 8.506 29.494 0 19 0Z" fill="' + mainColor + '" stroke="#ffffff" stroke-width="2.5"/>' +
+            '<circle cx="19" cy="18" r="11" fill="' + innerCircle + '"/>' +
+            '<path d="M20 9L13 19H19L17 27L25 17H19L20 9Z" fill="#ffffff"/>' +
+          '</svg>' +
+        '</div>';
+
+      return L.divIcon({
+        className: 'custom-svg-pin',
+        html: svgHtml,
+        iconSize: [26, 34],
+        iconAnchor: [13, 34],
+        popupAnchor: [0, -34]
+      });
+    }
+
+    var greenIcon = createSvgIcon('green', false);
+    var redIcon = createSvgIcon('red', false);
+
+    /* ============================================================
+       ระบบแทรกภาพแผนผังซ้อนทับ (Blueprint Image Overlay)
+       ============================================================ */
+    function triggerBlueprintPicker() {
+      document.getElementById('blueprintFileInput').click();
+    }
+
+    function handleBlueprintFile(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        blueprintImageSrc = e.target.result;
+        blueprintCenter = map.getCenter();
+        toggleBlueprintCard(true);
+        renderBlueprintOverlay();
+        showToast('📐 แทรกภาพแผนผังแล้ว ปรับขนาดและความเอียงตามต้องการ');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function toggleBlueprintCard(show) {
+      document.getElementById('blueprintControlCard').style.display = show ? 'block' : 'none';
+    }
+
+    function renderBlueprintOverlay() {
+      if (!blueprintImageSrc || !blueprintCenter) return;
+
+      if (blueprintLayer) {
+        map.removeLayer(blueprintLayer);
+      }
+
+      var scale = parseFloat(document.getElementById('bpScaleRange').value) / 100;
+      var aspect = parseFloat(document.getElementById('bpAspectRange').value);
+      var opacity = parseFloat(document.getElementById('bpOpacityRange').value) / 100;
+      var rotate = parseFloat(document.getElementById('bpRotateRange').value);
+
+      var halfW = (blueprintWidthMeters * scale * aspect) / 2;
+      var halfH = (blueprintHeightMeters * scale) / 2;
+
+      var centerPt = turf.point([blueprintCenter.lng, blueprintCenter.lat]);
+      var nw = turf.destination(turf.destination(centerPt, -halfH / 1000, 0), -halfW / 1000, 90);
+      var se = turf.destination(turf.destination(centerPt, halfH / 1000, 0), halfW / 1000, 90);
+
+      var bounds = [
+        [nw.geometry.coordinates[1], nw.geometry.coordinates[0]],
+        [se.geometry.coordinates[1], se.geometry.coordinates[0]]
+      ];
+
+      blueprintLayer = L.imageOverlay(blueprintImageSrc, bounds, {
+        opacity: opacity,
+        interactive: true,
+        zIndex: 400
+      }).addTo(map);
+
+      var el = blueprintLayer.getElement();
+      if (el) {
+        el.style.transformOrigin = 'center center';
+        el.style.transform += ' rotate(' + rotate + 'deg)';
+      }
+    }
+
+    function updateBlueprintTransform() {
+      var opacity = document.getElementById('bpOpacityRange').value;
+      var scale = document.getElementById('bpScaleRange').value;
+      var rotate = document.getElementById('bpRotateRange').value;
+      var aspect = document.getElementById('bpAspectRange').value;
+
+      document.getElementById('bpOpacityVal').innerText = opacity + '%';
+      document.getElementById('bpScaleVal').innerText = scale + '%';
+      document.getElementById('bpRotateVal').innerText = rotate + '°';
+      document.getElementById('bpAspectVal').innerText = aspect;
+
+      renderBlueprintOverlay();
+    }
+
+    function resetBlueprintTransform() {
+      document.getElementById('bpOpacityRange').value = 70;
+      document.getElementById('bpScaleRange').value = 100;
+      document.getElementById('bpRotateRange').value = 0;
+      document.getElementById('bpAspectRange').value = 1.0;
+      updateBlueprintTransform();
+    }
+
+    function removeBlueprintOverlay() {
+      if (blueprintLayer) {
+        map.removeLayer(blueprintLayer);
+        blueprintLayer = null;
+      }
+      blueprintImageSrc = '';
+      toggleBlueprintCard(false);
+      showToast('นำภาพแผนผังออกเรียบร้อย');
+    }
+
+    /* ============================================================
+       ฟังก์ชันจัดการรูปภาพ และ กล้องถ่ายภาพ
        ============================================================ */
     function showPhotoChoiceModal() {
       document.getElementById('photoChoiceModal').style.display = 'flex';
@@ -790,19 +1038,19 @@
     }
 
     function handleDirectFileSelect(event, type) {
-      const file = event.target.files[0];
+      var file = event.target.files[0];
       if (!file) return;
       processImageFile(file, type);
     }
 
     function processImageFile(file, type) {
-      const reader = new FileReader();
+      var reader = new FileReader();
       reader.onload = function(e) {
-        const img = new Image();
+        var img = new Image();
         img.onload = function() {
-          const canvas = document.createElement('canvas');
-          const maxW = 900, maxH = 1200;
-          let w = img.width, h = img.height;
+          var canvas = document.createElement('canvas');
+          var maxW = 900, maxH = 1200;
+          var w = img.width, h = img.height;
           if (w > maxW || h > maxH) {
             if (w / h > maxW / maxH) {
               h = Math.round(h * maxW / w);
@@ -813,9 +1061,9 @@
             }
           }
           canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d');
+          var ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
-          const base64 = canvas.toDataURL('image/jpeg', 0.75);
+          var base64 = canvas.toDataURL('image/jpeg', 0.75);
 
           if (type === 'photo') {
             selectedBase64Image = base64;
@@ -880,34 +1128,6 @@
         customAlertCallback = null;
       }
     }
-
-    function createSvgIcon(colorType, animate) {
-      var isDamaged = (colorType === 'ชำรุด' || colorType === 'red');
-      var isBlue = (colorType === 'blue');
-      var mainColor = isBlue ? '#0284c7' : (isDamaged ? '#ef4444' : '#10b981');
-      var innerCircle = isBlue ? '#0369a1' : (isDamaged ? '#b91c1c' : '#059669');
-
-      var svgHtml = 
-        '<div style="width:26px; height:34px;">' +
-          '<svg width="26" height="34" viewBox="0 0 38 48" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-            '<path d="M19 0C8.506 0 0 8.506 0 19C0 32.5 19 48 19 48C19 48 38 32.5 38 19C38 8.506 29.494 0 19 0Z" fill="' + mainColor + '" stroke="#ffffff" stroke-width="2.5"/>' +
-            '<circle cx="19" cy="18" r="11" fill="' + innerCircle + '"/>' +
-            '<path d="M20 9L13 19H19L17 27L25 17H19L20 9Z" fill="#ffffff"/>' +
-          '</svg>' +
-        '</div>';
-
-      return L.divIcon({
-        className: 'custom-svg-pin',
-        html: svgHtml,
-        iconSize: [26, 34],
-        iconAnchor: [13, 34],
-        popupAnchor: [0, -34]
-      });
-    }
-
-    var greenIcon = createSvgIcon('ปกติ', false);
-    var redIcon = createSvgIcon('ชำรุด', false);
-    var blueIcon = createSvgIcon('blue', false);
 
     function showToast(msg) {
       var toast = document.getElementById('toast');
@@ -1282,6 +1502,15 @@
           L.DomEvent.disableClickPropagation(btnFine);
           L.DomEvent.on(btnFine, 'click', function(e) { L.DomEvent.stop(e); toggleFineRotation(); });
 
+          // ปุ่มแทรกภาพแผนผังซ้อนทับ (Blueprint Overlay)
+          var btnBlueprint = L.DomUtil.create('button', 'leaflet-custom-btn', drawer);
+          btnBlueprint.innerHTML = '📐 แทรกภาพแผนผัง'; btnBlueprint.style.width = '100%';
+          L.DomEvent.disableClickPropagation(btnBlueprint);
+          L.DomEvent.on(btnBlueprint, 'click', function(e) {
+            L.DomEvent.stop(e);
+            triggerBlueprintPicker();
+          });
+
           var btnSurveyor = L.DomUtil.create('button', 'leaflet-custom-btn', drawer);
           btnSurveyor.id = 'btnToggleSurveyor';
           btnSurveyor.innerHTML = '👷‍♂️ ช่างเดินสำรวจ: เริ่ม'; btnSurveyor.style.width = '100%';
@@ -1337,7 +1566,7 @@
         draw: {
           polygon: { allowIntersection: false, shapeOptions: { color: '#10b981', weight: 2.5, fillOpacity: 0.3 } },
           rectangle: { shapeOptions: { color: '#10b981', weight: 2.5, fillOpacity: 0.3 } },
-          marker: { icon: createSvgIcon('ปกติ', true) },
+          marker: { icon: createSvgIcon('green', true) },
           circle: false, circlemarker: false, polyline: false
         },
         edit: { featureGroup: drawnItems, remove: true }
@@ -1435,7 +1664,7 @@
 
     function setMarkerAtCoords(lat, lng, statusText, animate) {
       drawnItems.clearLayers();
-      var animIcon = createSvgIcon('ปกติ', animate !== false);
+      var animIcon = createSvgIcon(selectedPinColor, animate !== false);
       var marker = L.marker([lat, lng], { icon: animIcon, draggable: true }).addTo(drawnItems);
       currentLayer = marker;
 
@@ -1864,9 +2093,9 @@
 
       if (type === 'csv') {
         var csvContent = '\uFEFF';
-        csvContent += 'ID,วันที่บันทึก,รหัสหน่วยงาน,ชื่อหน่วยงาน,ชื่อครุภัณฑ์,เลขทะเบียน,สถานที่,สถานะ,ประเภท,ละติจูด,ลองจิจูด,รูปภาพ,QR Code\n';
+        csvContent += 'ID,วันที่บันทึก,รหัสหน่วยงาน,ชื่อหน่วยงาน,ชื่อครุภัณฑ์,เลขทะเบียน,สถานที่,สถานะ,สีหมุด,ประเภท,ละติจูด,ลองจิจูด,รูปภาพ,QR Code\n';
         currentFilteredPlots.forEach(function(r) {
-          var row = ['"' + (r.id || '') + '"', '"' + (r.timestamp || '') + '"', '"' + (r.deptCode || '') + '"', '"' + (r.deptName || '') + '"', '"' + (r.name || '').replace(/"/g, '""') + '"', '"' + (r.regNo || '').replace(/"/g, '""') + '"', '"' + (r.location || '').replace(/"/g, '""') + '"', '"' + (r.status || '') + '"', '"' + (r.type || '') + '"', r.lat || '', r.lng || '', '"' + (r.imageUrl || '') + '"', '"' + (r.qrUrl || '') + '"'];
+          var row = ['"' + (r.id || '') + '"', '"' + (r.timestamp || '') + '"', '"' + (r.deptCode || '') + '"', '"' + (r.deptName || '') + '"', '"' + (r.name || '').replace(/"/g, '""') + '"', '"' + (r.regNo || '').replace(/"/g, '""') + '"', '"' + (r.location || '').replace(/"/g, '""') + '"', '"' + (r.status || '') + '"', '"' + (r.pinColor || 'green') + '"', '"' + (r.type || '') + '"', r.lat || '', r.lng || '', '"' + (r.imageUrl || '') + '"', '"' + (r.qrUrl || '') + '"'];
           csvContent += row.join(',') + '\n';
         });
         var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1878,7 +2107,7 @@
         currentFilteredPlots.forEach(function(r) {
           var geometry = (r.type === 'แปลงพื้นที่' && r.boundary) ? { type: 'Polygon', coordinates: r.boundary } : (r.lat && r.lng ? { type: 'Point', coordinates: [r.lng, r.lat] } : null);
           if (geometry) {
-            geojsonFeatures.push({ type: 'Feature', geometry: geometry, properties: { id: r.id, name: r.name, regNo: r.regNo, location: r.location, deptName: r.deptName, status: r.status, imageUrl: r.imageUrl, qrUrl: r.qrUrl } });
+            geojsonFeatures.push({ type: 'Feature', geometry: geometry, properties: { id: r.id, name: r.name, regNo: r.regNo, location: r.location, deptName: r.deptName, status: r.status, pinColor: r.pinColor, imageUrl: r.imageUrl, qrUrl: r.qrUrl } });
           }
         });
         var blob = new Blob([JSON.stringify({ type: 'FeatureCollection', features: geojsonFeatures }, null, 2)], { type: 'application/json' });
@@ -1902,13 +2131,13 @@
 
       data.forEach(function(item) {
         var isNormal = (item.status === 'ปกติ');
-        var color = isNormal ? '#10b981' : '#ef4444';
-        var icon = isNormal ? greenIcon : redIcon;
+        var pinColorKey = item.pinColor || (isNormal ? 'green' : 'red');
+        var icon = createSvgIcon(pinColorKey, false);
 
         try {
           var geoLayer = null;
           if (item.type === 'แปลงพื้นที่' && item.boundary) {
-            geoLayer = L.geoJSON({ "type": "Feature", "geometry": { "type": "Polygon", "coordinates": item.boundary } }, { style: { color: color, weight: 2.5, fillOpacity: 0.35 } });
+            geoLayer = L.geoJSON({ "type": "Feature", "geometry": { "type": "Polygon", "coordinates": item.boundary } }, { style: { color: '#10b981', weight: 2.5, fillOpacity: 0.35 } });
             geoLayer.bindTooltip('<b>' + (item.name || 'แปลงพื้นที่') + '</b> (' + item.status + ')', { direction: 'center', sticky: true });
           } else if (item.lat && item.lng) {
             geoLayer = L.marker([item.lat, item.lng], { icon: icon });
@@ -1935,7 +2164,7 @@
               '<b>ทะเบียน:</b> ' + item.regNo + '<br>' +
               '<b>หน่วยงาน:</b> ' + item.deptName + '<br>' +
               '<b>พิกัด:</b> ' + (item.lat ? item.lat.toFixed(5) : '-') + ', ' + (item.lng ? item.lng.toFixed(5) : '-') + '<br>' +
-              '<b>สถานะ:</b> <span style="color:' + color + ';font-weight:bold;">' + item.status + '</span><br>' +
+              '<b>สถานะ:</b> <span style="font-weight:bold;">' + item.status + '</span><br>' +
               (item.type === 'แปลงพื้นที่' ? ('<b>พื้นที่:</b> ' + item.areaThai + '<br>') : '') +
               qrTag + navBtn + actionBtns + '</div>';
 
@@ -1965,7 +2194,7 @@
         div.className = 'plot-item' + (isNormal ? '' : ' damaged');
         div.innerHTML = thumbImg + 
           '<div class="plot-info-wrap">' +
-            '<div class="plot-name">' + item.name + ' <span style="font-size:11px; float:right; color:' + color + ';">● ' + item.status + '</span></div>' +
+            '<div class="plot-name">' + item.name + ' <span style="font-size:11px; float:right;">● ' + item.status + '</span></div>' +
             '<div class="plot-sub">สถานที่: ' + item.location + ' | ทะเบียน: ' + item.regNo + '</div>' +
             '<div class="plot-sub">พิกัด: ' + (item.lat ? item.lat.toFixed(4) : '-') + ', ' + (item.lng ? item.lng.toFixed(4) : '-') + (item.type === 'แปลงพื้นที่' ? (' (' + item.areaThai + ')') : '') + '</div>' +
           '</div>';
@@ -2025,6 +2254,7 @@
         isEdit: Boolean(document.getElementById('editId').value),
         deptCode: document.getElementById('plotDept').value,
         name: name,
+        pinColor: selectedPinColor,
         regNo: document.getElementById('plotRegNo').value.trim(),
         location: document.getElementById('plotLocation').value.trim(),
         imageBase64: selectedBase64Image,
@@ -2067,6 +2297,8 @@
       document.getElementById('plotLocation').value = item.location;
       document.getElementById('plotDept').value = item.deptCode;
       
+      selectPinColor(item.pinColor || 'green');
+
       document.getElementById('currentExistingImageUrl').value = item.imageUrl || '';
       if (item.imageUrl) {
         document.getElementById('photoPreviewImg').src = item.imageUrl;
@@ -2094,7 +2326,7 @@
 
       drawnItems.clearLayers();
       if (item.type === 'หมุดตำแหน่งครุภัณฑ์' && item.lat && item.lng) {
-        var marker = L.marker([item.lat, item.lng], { icon: createSvgIcon(item.status === 'ชำรุด' ? 'ชำรุด' : 'ปกติ', true), draggable: true }).addTo(drawnItems);
+        var marker = L.marker([item.lat, item.lng], { icon: createSvgIcon(item.pinColor || 'green', true), draggable: true }).addTo(drawnItems);
         marker.on('dragend', function(e) {
           var pos = e.target.getLatLng();
           currentFeatureData.lat = pos.lat; currentFeatureData.lng = pos.lng;
@@ -2123,6 +2355,7 @@
       document.getElementById('plotName').value = '';
       document.getElementById('plotRegNo').value = '';
       document.getElementById('plotLocation').value = '';
+      selectPinColor('green');
       document.getElementById('shapeStatus').innerText = 'ยังไม่ได้กำหนดพิกัด';
       document.getElementById('coordPreviewBox').style.display = 'none';
       document.getElementById('saveBtn').disabled = true;
@@ -2175,7 +2408,7 @@
       navigator.geolocation.getCurrentPosition(function(pos) {
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         gpsMarkerGroup.clearLayers();
-        var mark = L.marker([lat, lng], { icon: blueIcon }).addTo(gpsMarkerGroup);
+        var mark = L.marker([lat, lng], { icon: createSvgIcon('blue', false) }).addTo(gpsMarkerGroup);
         mark.bindPopup('ตำแหน่ง GPS ปัจจุบันของคุณ').openPopup();
         if (fly) {
           map.flyTo([lat, lng], 19);
