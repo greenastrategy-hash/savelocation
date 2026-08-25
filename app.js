@@ -89,8 +89,16 @@ var greenIcon = createSvgIcon('green', false);
 var redIcon = createSvgIcon('red', false);
 
 /* ============================================================
-   ระบบแทรกภาพแผนผังซ้อนทับ (Blueprint Image Overlay)
+   ระบบแทรกภาพแผนผังซ้อนทับ (Free Drag & Lock Engine)
    ============================================================ */
+var blueprintLayer = null;
+var blueprintAnchorMarker = null;
+var blueprintImageSrc = '';
+var blueprintCenter = null;
+var blueprintWidthMeters = 120;
+var blueprintHeightMeters = 80;
+var isBlueprintLocked = false;
+
 function triggerBlueprintPicker() {
   document.getElementById('blueprintFileInput').click();
 }
@@ -103,9 +111,11 @@ function handleBlueprintFile(event) {
   reader.onload = function(e) {
     blueprintImageSrc = e.target.result;
     blueprintCenter = map.getCenter();
+    isBlueprintLocked = false;
+    updateLockUI();
     toggleBlueprintCard(true);
     renderBlueprintOverlay();
-    showToast('📐 แทรกภาพแผนผังแล้ว ปรับขนาดและความเอียงตามต้องการ');
+    showToast('📐 แทรกภาพแผนผังแล้ว สามารถลากจุดกึ่งกลางสีส้มเพื่อเลื่อนภาพได้');
   };
   reader.readAsDataURL(file);
 }
@@ -114,7 +124,67 @@ function toggleBlueprintCard(show) {
   document.getElementById('blueprintControlCard').style.display = show ? 'block' : 'none';
 }
 
-function renderBlueprintOverlay() {
+function toggleLockBlueprint() {
+  isBlueprintLocked = !isBlueprintLocked;
+  updateLockUI();
+  if (isBlueprintLocked) {
+    if (blueprintAnchorMarker) {
+      map.removeLayer(blueprintAnchorMarker);
+      blueprintAnchorMarker = null;
+    }
+    showToast('🔒 ล็อกตำแหน่งภาพแผนผังแล้ว (พร้อมสำหรับการปักหมุด)');
+  } else {
+    createBlueprintAnchorMarker();
+    showToast('🔓 ปลดล็อกภาพแล้ว สามารถลากย้ายจุดสีส้มได้');
+  }
+}
+
+function updateLockUI() {
+  var btn = document.getElementById('btnLockBlueprint');
+  if (!btn) return;
+  if (isBlueprintLocked) {
+    btn.style.background = '#10b981';
+    btn.style.color = '#ffffff';
+    btn.innerHTML = '🔒 สถานะ: ล็อกตำแหน่งแล้ว';
+  } else {
+    btn.style.background = '#1a73e8';
+    btn.style.color = '#ffffff';
+    btn.innerHTML = '🔓 สถานะ: ปลดล็อก (ลากย้ายได้)';
+  }
+}
+
+function createBlueprintAnchorMarker() {
+  if (isBlueprintLocked || !blueprintCenter) return;
+  if (blueprintAnchorMarker) {
+    map.removeLayer(blueprintAnchorMarker);
+  }
+
+  var anchorIcon = L.divIcon({
+    className: 'blueprint-anchor-icon',
+    html: '<div class="blueprint-anchor-dot" title="คลิกลากเพื่อย้ายภาพแผนผัง">✥</div>',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+
+  blueprintAnchorMarker = L.marker(blueprintCenter, {
+    icon: anchorIcon,
+    draggable: true,
+    zIndexOffset: 10000
+  }).addTo(map);
+
+  blueprintAnchorMarker.on('drag', function(e) {
+    blueprintCenter = e.target.getLatLng();
+    renderBlueprintOverlay(true);
+  });
+
+  blueprintAnchorMarker.on('dragend', function(e) {
+    blueprintCenter = e.target.getLatLng();
+    renderBlueprintOverlay(false);
+    showToast('ปรับย้ายตำแหน่งภาพแล้ว');
+  });
+}
+
+function renderBlueprintOverlay(isDragging) {
   if (!blueprintImageSrc || !blueprintCenter) return;
 
   if (blueprintLayer) {
@@ -140,7 +210,7 @@ function renderBlueprintOverlay() {
 
   blueprintLayer = L.imageOverlay(blueprintImageSrc, bounds, {
     opacity: opacity,
-    interactive: true,
+    interactive: false,
     zIndex: 400
   }).addTo(map);
 
@@ -149,6 +219,29 @@ function renderBlueprintOverlay() {
     el.style.transformOrigin = 'center center';
     el.style.transform += ' rotate(' + rotate + 'deg)';
   }
+
+  if (!isDragging && !isBlueprintLocked && !blueprintAnchorMarker) {
+    createBlueprintAnchorMarker();
+  }
+}
+
+function nudgeBlueprint(deltaX, deltaY) {
+  if (!blueprintCenter || isBlueprintLocked) return;
+  var stepMeters = 2; // เลื่อนทีละ 2 เมตร
+  var currentPt = turf.point([blueprintCenter.lng, blueprintCenter.lat]);
+  
+  if (deltaY !== 0) {
+    currentPt = turf.destination(currentPt, (deltaY * stepMeters) / 1000, deltaY > 0 ? 0 : 180);
+  }
+  if (deltaX !== 0) {
+    currentPt = turf.destination(currentPt, (deltaX * stepMeters) / 1000, deltaX > 0 ? 90 : 270);
+  }
+
+  blueprintCenter = L.latLng(currentPt.geometry.coordinates[1], currentPt.geometry.coordinates[0]);
+  if (blueprintAnchorMarker) {
+    blueprintAnchorMarker.setLatLng(blueprintCenter);
+  }
+  renderBlueprintOverlay(false);
 }
 
 function updateBlueprintTransform() {
@@ -162,7 +255,7 @@ function updateBlueprintTransform() {
   document.getElementById('bpRotateVal').innerText = rotate + '°';
   document.getElementById('bpAspectVal').innerText = aspect;
 
-  renderBlueprintOverlay();
+  renderBlueprintOverlay(false);
 }
 
 function resetBlueprintTransform() {
@@ -170,6 +263,10 @@ function resetBlueprintTransform() {
   document.getElementById('bpScaleRange').value = 100;
   document.getElementById('bpRotateRange').value = 0;
   document.getElementById('bpAspectRange').value = 1.0;
+  blueprintCenter = map.getCenter();
+  if (blueprintAnchorMarker) {
+    blueprintAnchorMarker.setLatLng(blueprintCenter);
+  }
   updateBlueprintTransform();
 }
 
@@ -177,6 +274,10 @@ function removeBlueprintOverlay() {
   if (blueprintLayer) {
     map.removeLayer(blueprintLayer);
     blueprintLayer = null;
+  }
+  if (blueprintAnchorMarker) {
+    map.removeLayer(blueprintAnchorMarker);
+    blueprintAnchorMarker = null;
   }
   blueprintImageSrc = '';
   toggleBlueprintCard(false);
