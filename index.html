@@ -29,18 +29,29 @@
     </div>
   </div>
 
-  <!-- แผงควบคุมภาพแผนผังซ้อนทับ (Free Drag & Lock Enabled) -->
+  <!-- ปุ่มลอยสำหรับเปิด/ปิดกล่องเครื่องมือแผนผังเมื่อถูกซ่อน -->
+  <button id="btnRestoreBlueprintCtrl" class="leaflet-custom-btn" style="position: fixed; bottom: 85px; right: 14px; z-index: 4999; display: none; background: #0f172a; color: white; border-radius: 20px; padding: 8px 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);" onclick="toggleBlueprintCard(true)">
+    📐 เครื่องมือแผนผัง
+  </button>
+
+  <!-- แผงควบคุมภาพแผนผังซ้อนทับ (Free Drag, Hide Tools & Aspect Ratio Lock) -->
   <div id="blueprintControlCard">
     <div class="bp-ctrl-header">
       <span>📐 แผงควบคุมภาพแผนผัง</span>
-      <button onclick="toggleBlueprintCard(false)" style="border:none;background:none;font-weight:bold;cursor:pointer;color:#94a3b8;font-size:14px;">✕</button>
+      <button onclick="toggleBlueprintCard(false)" title="ซ่อนแผงเครื่องมือ (ภาพยังคงอยู่)" style="border:none;background:none;font-weight:bold;cursor:pointer;color:#64748b;font-size:15px;padding:2px 6px;">✕ ซ่อน</button>
     </div>
 
     <!-- สวิตช์ล็อก/ปลดล็อกตำแหน่ง -->
-    <div style="margin-bottom: 10px;">
-      <button id="btnLockBlueprint" class="btn-choice-opt primary" style="padding: 7px 10px; font-size: 12px; justify-content: center;" onclick="toggleLockBlueprint()">
+    <div style="margin-bottom: 8px;">
+      <button id="btnLockBlueprint" class="btn-choice-opt primary" style="padding: 7px 10px; font-size: 12px; justify-content: center; margin: 0;" onclick="toggleLockBlueprint()">
         🔓 สถานะ: ปลดล็อก (ลากย้ายได้)
       </button>
+    </div>
+
+    <!-- ตัวเลือกล็อกสัดส่วนตามขนาดภาพจริง -->
+    <div style="display: flex; align-items: center; justify-content: space-between; background: #f1f5f9; padding: 6px 10px; border-radius: 8px; margin-bottom: 8px;">
+      <span style="font-size: 11.5px; font-weight: 600; color: var(--text-main);">🔒 ล็อกสัดส่วนภาพจริง (1:1):</span>
+      <input type="checkbox" id="bpLockAspectCheck" checked onchange="toggleLockAspectRatio()" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;" />
     </div>
 
     <div class="bp-slider-group">
@@ -50,7 +61,7 @@
 
     <div class="bp-slider-group">
       <label>ปรับขนาดภาพ (Scale): <span id="bpScaleVal">100%</span></label>
-      <input type="range" class="bp-slider" id="bpScaleRange" min="20" max="400" value="100" oninput="updateBlueprintTransform()">
+      <input type="range" class="bp-slider" id="bpScaleRange" min="15" max="400" value="100" oninput="updateBlueprintTransform()">
     </div>
 
     <div class="bp-slider-group">
@@ -58,15 +69,15 @@
       <input type="range" class="bp-slider" id="bpRotateRange" min="0" max="360" value="0" oninput="updateBlueprintTransform()">
     </div>
 
-    <div class="bp-slider-group">
-      <label>สัดส่วน กว้าง x สูง: <span id="bpAspectVal">1.0</span></label>
+    <div class="bp-slider-group" id="bpAspectGroup" style="display: none;">
+      <label>ปรับสัดส่วน กว้าง x สูง: <span id="bpAspectVal">1.0</span></label>
       <input type="range" class="bp-slider" id="bpAspectRange" min="0.4" max="2.5" step="0.05" value="1.0" oninput="updateBlueprintTransform()">
     </div>
 
     <!-- ปุ่มเลื่อนพิกัดละเอียด 4 ทิศทาง -->
-    <div style="margin-top: 8px;">
-      <label style="display:block; margin-bottom:4px; font-weight:600; color:var(--text-sub);">เลื่อนละเอียด (Nudge):</label>
-      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:4px; max-width: 150px; margin: 0 auto;">
+    <div style="margin-top: 6px;">
+      <label style="display:block; margin-bottom:4px; font-weight:600; color:var(--text-sub); font-size:11px;">เลื่อนละเอียด (Nudge):</label>
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:4px; max-width: 140px; margin: 0 auto;">
         <div></div>
         <button class="btn-choice-opt" style="padding:4px; margin:0;" onclick="nudgeBlueprint(0, 1)">⬆️</button>
         <div></div>
@@ -76,9 +87,9 @@
       </div>
     </div>
 
-    <div class="bp-btn-grid" style="margin-top: 10px;">
-      <button class="btn-choice-opt" style="padding: 6px; font-size: 11px;" onclick="resetBlueprintTransform()">🔄 รีเซ็ตภาพ</button>
-      <button class="btn-choice-opt" style="padding: 6px; font-size: 11px; color:#ef4444; border-color:#fecaca;" onclick="removeBlueprintOverlay()">🗑️ ลบแผนผัง</button>
+    <div class="bp-btn-grid" style="margin-top: 8px;">
+      <button class="btn-choice-opt" style="padding: 6px; font-size: 11px; margin: 0;" onclick="resetBlueprintTransform()">🔄 รีเซ็ตภาพ</button>
+      <button class="btn-choice-opt" style="padding: 6px; font-size: 11px; color:#ef4444; border-color:#fecaca; margin: 0;" onclick="removeBlueprintOverlay()">🗑️ ลบแผนผัง</button>
     </div>
   </div>
 
