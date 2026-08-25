@@ -88,8 +88,11 @@ function createSvgIcon(colorType, animate) {
   });
 }
 
+var greenIcon = createSvgIcon('green', false);
+var redIcon = createSvgIcon('red', false);
+
 /* ============================================================
-   ระบบแทรกภาพแผนผังซ้อนทับ (พร้อมการเก็บ Draft ใน LocalStorage)
+   ระบบแทรกภาพแผนผังซ้อนทับ (ปรับ Z-Index ให้อยู่ใต้หมุด)
    ============================================================ */
 function triggerBlueprintPicker() {
   document.getElementById('blueprintFileInput').click();
@@ -193,7 +196,7 @@ function createBlueprintAnchorMarker() {
   });
 
   blueprintAnchorMarker = L.marker(blueprintCenter, {
-    icon: anchorIcon, draggable: true, zIndexOffset: 10000
+    icon: anchorIcon, draggable: true, zIndexOffset: 2000
   }).addTo(map);
 
   blueprintAnchorMarker.on('drag', function(e) {
@@ -212,6 +215,7 @@ function applyBlueprintRotationCSS() {
   var el = blueprintLayer.getElement();
   if (el) {
     el.style.transformOrigin = '50% 50%';
+    el.style.pointerEvents = 'none'; // ให้คลิกทะลุภาพไปโดนหมุดได้
     var baseTransform = el.style.transform.replace(/\s*rotate\([^)]*\)/g, '');
     el.style.transform = baseTransform + ' rotate(' + currentBlueprintRotation + 'deg)';
   }
@@ -243,7 +247,14 @@ function renderBlueprintOverlay(isDragging) {
     [se.geometry.coordinates[1], se.geometry.coordinates[0]]
   ];
 
-  blueprintLayer = L.imageOverlay(blueprintImageSrc, bounds, { opacity: opacity, interactive: false, zIndex: 400 }).addTo(map);
+  // ปรับ zIndex เป็น 1 ให้อยู่ใต้หมุด Marker เสมอ
+  blueprintLayer = L.imageOverlay(blueprintImageSrc, bounds, { 
+    opacity: opacity, 
+    interactive: false, 
+    zIndex: 1, 
+    pane: 'overlayPane' 
+  }).addTo(map);
+
   applyBlueprintRotationCSS();
 
   if (!isDragging && !isBlueprintLocked && !blueprintAnchorMarker) {
@@ -820,7 +831,11 @@ function handleFeatureCreated(layer, layerType) {
 function setMarkerAtCoords(lat, lng, statusText, animate) {
   drawnItems.clearLayers();
   var animIcon = createSvgIcon(selectedPinColor, animate !== false);
-  var marker = L.marker([lat, lng], { icon: animIcon, draggable: true }).addTo(drawnItems);
+  var marker = L.marker([lat, lng], { 
+    icon: animIcon, 
+    draggable: true,
+    zIndexOffset: 1500
+  }).addTo(drawnItems);
   currentLayer = marker;
 
   marker.on('dragend', function(e) {
@@ -1178,12 +1193,16 @@ function exportFilteredData(type) {
 }
 
 function renderSavedOnMapAndList(data) {
-  existingLayerGroup.clearLayers(); markerClusterGroup.clearLayers();
+  existingLayerGroup.clearLayers(); 
+  markerClusterGroup.clearLayers();
   var listContainer = document.getElementById('recordsList');
   listContainer.innerHTML = '';
   document.getElementById('recordCount').innerText = '(พบ ' + data.length + ' รายการ)';
 
-  if (!data || data.length === 0) { listContainer.innerHTML = '<p style="font-size:12px;color:#888;text-align:center;margin-top:15px;">ไม่พบรายการที่ตรงกับเงื่อนไขตัวกรอง</p>'; return; }
+  if (!data || data.length === 0) { 
+    listContainer.innerHTML = '<p style="font-size:12px;color:#888;text-align:center;margin-top:15px;">ไม่พบรายการที่ตรงกับเงื่อนไขตัวกรอง</p>'; 
+    return; 
+  }
 
   data.forEach(function(item) {
     var isNormal = (item.status === 'ปกติ');
@@ -1196,7 +1215,8 @@ function renderSavedOnMapAndList(data) {
         geoLayer = L.geoJSON({ "type": "Feature", "geometry": { "type": "Polygon", "coordinates": item.boundary } }, { style: { color: '#10b981', weight: 2.5, fillOpacity: 0.35 } });
         geoLayer.bindTooltip('<b>' + (item.name || 'แปลงพื้นที่') + '</b> (' + item.status + ')', { direction: 'center', sticky: true });
       } else if (item.lat && item.lng) {
-        geoLayer = L.marker([item.lat, item.lng], { icon: icon });
+        // กำหนด zIndexOffset ให้หมุดลอยอยู่เหนือภาพแผนผัง
+        geoLayer = L.marker([item.lat, item.lng], { icon: icon, zIndexOffset: 1000 });
         geoLayer.bindTooltip('<b>' + (item.name || 'ครุภัณฑ์') + '</b>', { direction: 'top', offset: [0, -36], permanent: false });
       }
 
@@ -1232,11 +1252,15 @@ function renderSavedOnMapAndList(data) {
         });
 
         geoLayer.options.featureId = item.id;
-        if (item.type === 'แปลงพื้นที่') existingLayerGroup.addLayer(geoLayer); else markerClusterGroup.addLayer(geoLayer);
+        if (item.type === 'แปลงพื้นที่') existingLayerGroup.addLayer(geoLayer); 
+        else markerClusterGroup.addLayer(geoLayer);
       }
     } catch(e) {}
 
-    var thumbImg = item.imageUrl ? '<img src="' + item.imageUrl + '" class="plot-thumb-3-4" onerror="this.src=\'data:image/svg+xml;utf8,<svg xmlns=\\\'http://www.w3.org/2000/svg\\\' width=\\\'54\\\' height=\\\'72\\\' fill=\\\'%23cbd5e1\\\' viewBox=\\\'0 0 24 24\\\'><path d=\\\'M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z\\\'/></svg>\';" />' : '<div class="plot-thumb-3-4" style="display:flex;align-items:center;justify-content:center;font-size:18px;color:#94a3b8;">📍</div>';
+    var thumbImg = item.imageUrl 
+      ? '<img src="' + item.imageUrl + '" class="plot-thumb-3-4" onerror="this.src=\'data:image/svg+xml;utf8,<svg xmlns=\\\'http://www.w3.org/2000/svg\\\' width=\\\'54\\\' height=\\\'72\\\' fill=\\\'%23cbd5e1\\\' viewBox=\\\'0 0 24 24\\\'><path d=\\\'M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z\\\'/></svg>\';" />' 
+      : '<div class="plot-thumb-3-4" style="display:flex;align-items:center;justify-content:center;font-size:18px;color:#94a3b8;">📍</div>';
+
     var div = document.createElement('div');
     div.className = 'plot-item' + (isNormal ? '' : ' damaged');
     div.innerHTML = thumbImg + 
@@ -1349,7 +1373,7 @@ function startEditItem(id) {
 
   drawnItems.clearLayers();
   if (item.type === 'หมุดตำแหน่งครุภัณฑ์' && item.lat && item.lng) {
-    var marker = L.marker([item.lat, item.lng], { icon: createSvgIcon(item.pinColor || 'green', true), draggable: true }).addTo(drawnItems);
+    var marker = L.marker([item.lat, item.lng], { icon: createSvgIcon(item.pinColor || 'green', true), draggable: true, zIndexOffset: 1500 }).addTo(drawnItems);
     marker.on('dragend', function(e) {
       var pos = e.target.getLatLng();
       currentFeatureData.lat = pos.lat; currentFeatureData.lng = pos.lng;
@@ -1399,12 +1423,12 @@ function deleteItemWithAnim(id, btnElement) {
   });
 }
 
-// ค้นหาสถานที่และเก็บข้อความตามที่พิมพ์ลงในฟอร์มทันที
+// ค้นหาสถานที่และเก็บข้อความตามที่พิมพ์ค้นหาลงช่องสถานที่ของฟอร์มทันที
 function searchLocation() {
   var query = document.getElementById('searchInput').value.trim();
   if (!query) return;
 
-  // นำข้อความที่พิมพ์ค้นหาไปใส่ในช่องสถานที่ของฟอร์มทันที
+  // เก็บข้อความตามที่พิมพ์ค้นหาลงช่องสถานที่ของฟอร์มทันที
   document.getElementById('plotLocation').value = query;
 
   var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query);
@@ -1415,7 +1439,7 @@ function searchLocation() {
         var lat = parseFloat(results[0].lat), lon = parseFloat(results[0].lon);
         map.flyTo([lat, lon], 18);
         if (window.innerWidth <= 768) toggleMobileSidebar(false);
-        showToast('📍 บินไปยัง: ' + query);
+        showToast('📍 ระบุสถานที่: ' + query);
       } else {
         showToast('ระบุสถานที่: ' + query + ' (ไม่พบพิกัดบนแผนที่)');
       }
@@ -1430,7 +1454,7 @@ function locateUser(fly) {
   navigator.geolocation.getCurrentPosition(function(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
     gpsMarkerGroup.clearLayers();
-    var mark = L.marker([lat, lng], { icon: createSvgIcon('blue', false) }).addTo(gpsMarkerGroup);
+    var mark = L.marker([lat, lng], { icon: createSvgIcon('blue', false), zIndexOffset: 2000 }).addTo(gpsMarkerGroup);
     mark.bindPopup('ตำแหน่ง GPS ปัจจุบันของคุณ').openPopup();
     if (fly) { map.flyTo([lat, lng], 19); if (window.innerWidth <= 768) toggleMobileSidebar(false); }
   }, function(err) { showCustomerAlert('ระบุตำแหน่งไม่สำเร็จ', 'กรุณาเปิด Location Service ในอุปกรณ์', 'error'); }, { enableHighAccuracy: true });
