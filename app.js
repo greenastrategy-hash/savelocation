@@ -89,14 +89,14 @@ var greenIcon = createSvgIcon('green', false);
 var redIcon = createSvgIcon('red', false);
 
 /* ============================================================
-   ระบบแทรกภาพแผนผังซ้อนทับ (Free Drag & Lock Engine)
+   ระบบแทรกภาพแผนผังซ้อนทับ (Aspect Ratio Lock & Hide Engine)
    ============================================================ */
 var blueprintLayer = null;
 var blueprintAnchorMarker = null;
 var blueprintImageSrc = '';
 var blueprintCenter = null;
-var blueprintWidthMeters = 120;
-var blueprintHeightMeters = 80;
+var blueprintBaseSizeMeters = 100;
+var originalImageAspect = 1.0; // อัตราส่วนความกว้าง/ความสูงจริงของรูปภาพ
 var isBlueprintLocked = false;
 
 function triggerBlueprintPicker() {
@@ -110,18 +110,55 @@ function handleBlueprintFile(event) {
   var reader = new FileReader();
   reader.onload = function(e) {
     blueprintImageSrc = e.target.result;
-    blueprintCenter = map.getCenter();
-    isBlueprintLocked = false;
-    updateLockUI();
-    toggleBlueprintCard(true);
-    renderBlueprintOverlay();
-    showToast('📐 แทรกภาพแผนผังแล้ว สามารถลากจุดกึ่งกลางสีส้มเพื่อเลื่อนภาพได้');
+    
+    // โหลดภาพเพื่ออ่านสัดส่วนกว้าง x ยาวจริงของไฟล์ต้นฉบับ
+    var img = new Image();
+    img.onload = function() {
+      originalImageAspect = (img.naturalWidth && img.naturalHeight) 
+        ? (img.naturalWidth / img.naturalHeight) 
+        : 1.0;
+
+      blueprintCenter = map.getCenter();
+      isBlueprintLocked = false;
+      updateLockUI();
+      toggleBlueprintCard(true);
+      renderBlueprintOverlay();
+      showToast('📐 แทรกภาพแผนผังตามสัดส่วนจริงแล้ว');
+    };
+    img.src = blueprintImageSrc;
   };
   reader.readAsDataURL(file);
 }
 
+// ฟังก์ชันซ่อน/แสดงแผงควบคุมภาพแผนผัง
 function toggleBlueprintCard(show) {
-  document.getElementById('blueprintControlCard').style.display = show ? 'block' : 'none';
+  var card = document.getElementById('blueprintControlCard');
+  var restoreBtn = document.getElementById('btnRestoreBlueprintCtrl');
+  
+  if (show) {
+    card.style.display = 'block';
+    restoreBtn.style.display = 'none';
+  } else {
+    card.style.display = 'none';
+    // หากมีภาพแผนผังแสดงอยู่บนแผนที่ ให้โชว์ปุ่มลอยเรียกคืนเมนู
+    if (blueprintLayer) {
+      restoreBtn.style.display = 'flex';
+    } else {
+      restoreBtn.style.display = 'none';
+    }
+  }
+}
+
+// ฟังก์ชันสลับการล็อกสัดส่วนภาพจริง (1:1)
+function toggleLockAspectRatio() {
+  var isLocked = document.getElementById('bpLockAspectCheck').checked;
+  var aspectGroup = document.getElementById('bpAspectGroup');
+  if (isLocked) {
+    aspectGroup.style.display = 'none';
+  } else {
+    aspectGroup.style.display = 'block';
+  }
+  renderBlueprintOverlay(false);
 }
 
 function toggleLockBlueprint() {
@@ -192,12 +229,17 @@ function renderBlueprintOverlay(isDragging) {
   }
 
   var scale = parseFloat(document.getElementById('bpScaleRange').value) / 100;
-  var aspect = parseFloat(document.getElementById('bpAspectRange').value);
   var opacity = parseFloat(document.getElementById('bpOpacityRange').value) / 100;
   var rotate = parseFloat(document.getElementById('bpRotateRange').value);
+  var isAspectLocked = document.getElementById('bpLockAspectCheck').checked;
 
-  var halfW = (blueprintWidthMeters * scale * aspect) / 2;
-  var halfH = (blueprintHeightMeters * scale) / 2;
+  // คำนวณสัดส่วนกว้าง x สูง: ถ้ายึดตามจริงใช้ originalImageAspect
+  var currentAspect = isAspectLocked 
+    ? originalImageAspect 
+    : (originalImageAspect * parseFloat(document.getElementById('bpAspectRange').value));
+
+  var halfH = (blueprintBaseSizeMeters * scale) / 2;
+  var halfW = (halfH * currentAspect);
 
   var centerPt = turf.point([blueprintCenter.lng, blueprintCenter.lat]);
   var nw = turf.destination(turf.destination(centerPt, -halfH / 1000, 0), -halfW / 1000, 90);
@@ -263,6 +305,9 @@ function resetBlueprintTransform() {
   document.getElementById('bpScaleRange').value = 100;
   document.getElementById('bpRotateRange').value = 0;
   document.getElementById('bpAspectRange').value = 1.0;
+  document.getElementById('bpLockAspectCheck').checked = true;
+  document.getElementById('bpAspectGroup').style.display = 'none';
+  
   blueprintCenter = map.getCenter();
   if (blueprintAnchorMarker) {
     blueprintAnchorMarker.setLatLng(blueprintCenter);
@@ -281,6 +326,7 @@ function removeBlueprintOverlay() {
   }
   blueprintImageSrc = '';
   toggleBlueprintCard(false);
+  document.getElementById('btnRestoreBlueprintCtrl').style.display = 'none';
   showToast('นำภาพแผนผังออกเรียบร้อย');
 }
 
