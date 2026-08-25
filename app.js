@@ -88,9 +88,6 @@ function createSvgIcon(colorType, animate) {
   });
 }
 
-var greenIcon = createSvgIcon('green', false);
-var redIcon = createSvgIcon('red', false);
-
 /* ============================================================
    ระบบแทรกภาพแผนผังซ้อนทับ (พร้อมการเก็บ Draft ใน LocalStorage)
    ============================================================ */
@@ -106,7 +103,6 @@ function handleBlueprintFile(event) {
   reader.onload = function(e) {
     var img = new Image();
     img.onload = function() {
-      // ทำการย่อขนาดภาพเล็กน้อยก่อนเก็บลง Draft เพื่อไม่ให้ LocalStorage เต็ม
       var canvas = document.createElement('canvas');
       var maxW = 1600, maxH = 1600;
       var w = img.width, h = img.height;
@@ -127,7 +123,7 @@ function handleBlueprintFile(event) {
       updateLockUI();
       toggleBlueprintCard(true);
       renderBlueprintOverlay(false);
-      showToast('📐 แทรกภาพแผนผังเรียบร้อย (ระบบออโต้เซฟร่างแล้ว)');
+      showToast('📐 แทรกภาพแผนผังเรียบร้อย');
     };
     img.src = e.target.result;
   };
@@ -254,7 +250,6 @@ function renderBlueprintOverlay(isDragging) {
     createBlueprintAnchorMarker();
   }
 
-  // เซฟเป็น Draft ถ้าไม่ได้ลากอยู่
   if (!isDragging) saveBlueprintDraft();
 }
 
@@ -298,11 +293,10 @@ function removeBlueprintOverlay() {
   blueprintImageSrc = '';
   toggleBlueprintCard(false);
   document.getElementById('btnRestoreBlueprintCtrl').style.display = 'none';
-  localStorage.removeItem('blueprintDraftData'); // ลบ Draft
+  localStorage.removeItem('blueprintDraftData');
   showToast('นำภาพแผนผังออกเรียบร้อยแล้ว');
 }
 
-// ฟังก์ชันเก็บร่างภาพแผนผัง
 function saveBlueprintDraft() {
   if (!blueprintImageSrc) return;
   try {
@@ -318,12 +312,9 @@ function saveBlueprintDraft() {
       originalAspect: originalImageAspect
     };
     localStorage.setItem('blueprintDraftData', JSON.stringify(draft));
-  } catch (e) {
-    console.warn('Draft save error (image too large):', e);
-  }
+  } catch (e) {}
 }
 
-// ฟังก์ชันดึงร่างภาพแผนผังเมื่อโหลดเว็บ
 function loadBlueprintDraft() {
   var draftStr = localStorage.getItem('blueprintDraftData');
   if (draftStr) {
@@ -394,7 +385,7 @@ function handleDirectFileSelect(event, type) {
         selectedBase64Qr = base64;
         document.getElementById('qrPreviewImg').src = base64;
         document.getElementById('qrPreviewWrap').style.display = 'block';
-        document.getElementById('qrPlaceholderText').style.display = 'none';
+        document.getElementById('photoPlaceholderText').style.display = 'none';
         showToast('เลือกภาพ QR Code เรียบร้อย');
       }
     };
@@ -474,7 +465,6 @@ window.onload = function() {
     loadSavedData();
   }
   
-  // โหลดแบบร่างแผนผังที่เคยเซฟไว้
   setTimeout(loadBlueprintDraft, 500);
 };
 
@@ -752,7 +742,7 @@ function initMap() {
     draw: {
       polygon: { allowIntersection: false, shapeOptions: { color: '#10b981', weight: 2.5, fillOpacity: 0.3 } },
       rectangle: { shapeOptions: { color: '#10b981', weight: 2.5, fillOpacity: 0.3 } },
-      marker: { icon: createSvgIcon('green', true) }, circle: false, circlemarker: false, polyline: false
+      marker: { icon: createSvgIcon(selectedPinColor, true) }, circle: false, circlemarker: false, polyline: false
     }, edit: { featureGroup: drawnItems, remove: true }
   });
   map.addControl(drawControl);
@@ -762,27 +752,10 @@ function initMap() {
     if (isMeasuring) { handleMeasureClick(e.latlng); return; }
     if (isTapToPinActive) {
       isTapToPinActive = false;
-      fetchReverseGeocode(e.latlng.lat, e.latlng.lng);
       setMarkerAtCoords(e.latlng.lat, e.latlng.lng, 'พิกัดจากการสัมผัสแผนที่', true);
       toggleMobileSidebar(true);
     }
   });
-}
-
-// ระบบดึงชื่อสถานที่อัตโนมัติจากพิกัด (Reverse Geocoding)
-function fetchReverseGeocode(lat, lng) {
-  var locField = document.getElementById('plotLocation');
-  if (locField && locField.value.trim() !== '') return;
-  
-  var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng;
-  fetch(url)
-    .then(res => res.json())
-    .then(data => {
-      if (data && data.display_name && locField.value.trim() === '') {
-        var parts = data.display_name.split(',');
-        locField.value = parts.slice(0, 3).join(',').trim();
-      }
-    }).catch(e => {});
 }
 
 function handleMeasureClick(latlng) {
@@ -816,11 +789,9 @@ function handleFeatureCreated(layer, layerType) {
     lng = centroid.geometry.coordinates[0]; lat = centroid.geometry.coordinates[1];
     document.getElementById('areaPreviewText').innerText = 'ขนาดพื้นที่: ' + areaSqm.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ตร.ม. (' + areaThai + ')';
     layer.bindPopup('<b>📐 ผลการคำนวณพื้นที่</b><br>ขนาด: ' + areaSqm.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ตร.ม.<br>(' + areaThai + ')').openPopup();
-    fetchReverseGeocode(lat, lng);
   } else {
     lng = geojson.geometry.coordinates[0]; lat = geojson.geometry.coordinates[1];
     document.getElementById('areaPreviewText').innerText = '';
-    fetchReverseGeocode(lat, lng);
 
     if (currentLayer.dragging) {
       currentLayer.dragging.enable();
@@ -829,7 +800,6 @@ function handleFeatureCreated(layer, layerType) {
         currentFeatureData.lat = pos.lat; currentFeatureData.lng = pos.lng;
         document.getElementById('prevLat').innerText = pos.lat.toFixed(6);
         document.getElementById('prevLng').innerText = pos.lng.toFixed(6);
-        fetchReverseGeocode(pos.lat, pos.lng);
         showToast('อัปเดตพิกัดจากการเลื่อนแล้ว');
       });
     }
@@ -858,7 +828,6 @@ function setMarkerAtCoords(lat, lng, statusText, animate) {
     currentFeatureData.lat = p.lat; currentFeatureData.lng = p.lng;
     document.getElementById('prevLat').innerText = p.lat.toFixed(6);
     document.getElementById('prevLng').innerText = p.lng.toFixed(6);
-    fetchReverseGeocode(p.lat, p.lng);
   });
 
   currentFeatureData = { type: 'หมุดตำแหน่งครุภัณฑ์', lat: lat, lng: lng, boundary: null, areaSqm: 0, areaThai: '-' };
@@ -877,7 +846,6 @@ function pinCurrentLocation() {
   navigator.geolocation.getCurrentPosition(function(pos) {
     var lat = pos.coords.latitude; var lng = pos.coords.longitude;
     map.flyTo([lat, lng], 19);
-    fetchReverseGeocode(lat, lng);
     setMarkerAtCoords(lat, lng, 'พิกัด GPS ปัจจุบัน (ความแม่นยำ ~' + Math.round(pos.coords.accuracy) + ' ม.)', true);
     showToast('ปักหมุด GPS สำเร็จ');
   }, function(err) { showCustomerAlert('ระบุพิกัดไม่สำเร็จ', err.message, 'error'); }, { enableHighAccuracy: true });
@@ -885,7 +853,6 @@ function pinCurrentLocation() {
 
 function pinMapCenter() {
   var center = map.getCenter();
-  fetchReverseGeocode(center.lat, center.lng);
   setMarkerAtCoords(center.lat, center.lng, 'พิกัดตรงจุดเล็งกึ่งกลางหน้าจอ', true);
   showToast('ปักหมุดที่เป้าโฟกัสเรียบร้อย');
   if (window.innerWidth <= 768) toggleMobileSidebar(true);
@@ -1388,7 +1355,6 @@ function startEditItem(id) {
       currentFeatureData.lat = pos.lat; currentFeatureData.lng = pos.lng;
       document.getElementById('prevLat').innerText = pos.lat.toFixed(6);
       document.getElementById('prevLng').innerText = pos.lng.toFixed(6);
-      fetchReverseGeocode(pos.lat, pos.lng);
       showToast('เลื่อนตำแหน่งไปยังพิกัดใหม่แล้ว');
     });
     map.flyTo([item.lat, item.lng], 20);
@@ -1433,9 +1399,14 @@ function deleteItemWithAnim(id, btnElement) {
   });
 }
 
+// ค้นหาสถานที่และเก็บข้อความตามที่พิมพ์ลงในฟอร์มทันที
 function searchLocation() {
   var query = document.getElementById('searchInput').value.trim();
   if (!query) return;
+
+  // นำข้อความที่พิมพ์ค้นหาไปใส่ในช่องสถานที่ของฟอร์มทันที
+  document.getElementById('plotLocation').value = query;
+
   var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query);
   fetch(url)
     .then(function(res) { return res.json(); })
@@ -1444,15 +1415,11 @@ function searchLocation() {
         var lat = parseFloat(results[0].lat), lon = parseFloat(results[0].lon);
         map.flyTo([lat, lon], 18);
         if (window.innerWidth <= 768) toggleMobileSidebar(false);
-        var parts = results[0].display_name.split(',');
-        document.getElementById('plotLocation').value = parts.slice(0, 3).join(',').trim();
-        showToast('📍 ระบุสถานที่: ' + parts[0]);
+        showToast('📍 บินไปยัง: ' + query);
       } else {
-        document.getElementById('plotLocation').value = query;
         showToast('ระบุสถานที่: ' + query + ' (ไม่พบพิกัดบนแผนที่)');
       }
     }).catch(function() { 
-      document.getElementById('plotLocation').value = query;
       showToast('ระบุสถานที่: ' + query); 
     });
 }
