@@ -658,21 +658,63 @@ function toggleMobileSidebar(forceState) {
 }
 
 function initMap() {
-  var esriClean = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 22, maxNativeZoom: 19, attribution: 'Tiles &copy; Esri' });
-  var googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 22, maxNativeZoom: 21, attribution: '&copy; Google Maps' });
-  var cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 22, maxNativeZoom: 20, attribution: '&copy; CartoDB' });
-  var osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19, attribution: '&copy; OpenStreetMap' });
-
-  map = L.map('map', {
-    center: INITIAL_CENTER, zoom: INITIAL_ZOOM, maxZoom: 22, zoomSnap: 0.25, zoomDelta: 0.5,
-    wheelPxPerZoomLevel: 120, layers: [esriClean], zoomControl: false, rotate: true, bearing: 0,
-    touchRotate: true, shiftKeyRotate: true, closePopupOnClick: false
+  // 1. ภาพถ่ายดาวเทียมความคมชัดสูง (Esri Clean)
+  var esriClean = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 22,
+    maxNativeZoom: 19,
+    attribution: 'Tiles &copy; Esri'
   });
 
-  map.on('zoom viewreset zoomend moveend', function() { applyBlueprintRotationCSS(); });
+  // 2. ภาพถ่ายดาวเทียมพร้อมเส้นถนน (Google Hybrid)
+  var googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    maxZoom: 22,
+    maxNativeZoom: 21,
+    attribution: '&copy; Google Maps'
+  });
+
+  // 3. แผนที่ลายเส้นโทนสว่าง (Esri Light Gray Canvas - ฟรี ไม่ติด API Key)
+  var esriLight = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 22,
+    maxNativeZoom: 16,
+    attribution: 'Tiles &copy; Esri'
+  });
+
+  // 4. แผนที่มาตรฐาน OpenStreetMap (OSM)
+  var osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 22,
+    maxNativeZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  });
+
+  map = L.map('map', {
+    center: INITIAL_CENTER,
+    zoom: INITIAL_ZOOM,
+    maxZoom: 22,
+    zoomSnap: 0.25,
+    zoomDelta: 0.5,
+    wheelPxPerZoomLevel: 120,
+    layers: [esriClean], // ตั้งค่าเริ่มต้นเป็นภาพถ่ายดาวเทียม
+    zoomControl: false,
+    rotate: true,
+    bearing: 0,
+    touchRotate: true,
+    shiftKeyRotate: true,
+    closePopupOnClick: false
+  });
+
+  map.on('zoom viewreset zoomend moveend', function() {
+    applyBlueprintRotationCSS();
+  });
+
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  var baseMaps = { "🛰️ ดาวเทียมธรรมชาติ (Esri Clean)": esriClean, "🛰️ ดาวเทียม + ถนน (Google Hybrid)": googleHybrid, "🗺️ แผนที่โทนสว่าง (Clean Light)": cartoLight, "🗺️ แผนที่มาตรฐาน (OSM)": osmStandard };
+  // รายการสลับชั้นแผนที่ (ตัดชั้นที่มีปัญหา API Key ออกแล้ว)
+  var baseMaps = {
+    "🛰️ ดาวเทียมธรรมชาติ (Esri Clean)": esriClean,
+    "🛰️ ดาวเทียม + ถนน (Google Hybrid)": googleHybrid,
+    "🗺️ แผนที่โทนสว่าง (Esri Light Gray)": esriLight,
+    "🗺️ แผนที่มาตรฐาน (OSM)": osmStandard
+  };
   L.control.layers(baseMaps, null, { position: 'topright', collapsed: true }).addTo(map);
 
   var LeftActionControl = L.Control.extend({
@@ -680,12 +722,16 @@ function initMap() {
     onAdd: function(map) {
       var container = L.DomUtil.create('div', 'leaflet-bar');
       var btnCompass = L.DomUtil.create('a', 'leaflet-left-tool-btn', container);
-      btnCompass.id = 'btnCompassLeft'; btnCompass.innerHTML = '<span id="compassIcon" class="compass-needle-left">🧭</span>';
-      L.DomEvent.disableClickPropagation(btnCompass); L.DomEvent.on(btnCompass, 'click', function(e) { L.DomEvent.stop(e); resetNorth(); });
+      btnCompass.id = 'btnCompassLeft';
+      btnCompass.innerHTML = '<span id="compassIcon" class="compass-needle-left">🧭</span>';
+      L.DomEvent.disableClickPropagation(btnCompass);
+      L.DomEvent.on(btnCompass, 'click', function(e) { L.DomEvent.stop(e); resetNorth(); });
 
       var btnMeasure = L.DomUtil.create('a', 'leaflet-left-tool-btn', container);
-      btnMeasure.id = 'btnMeasureLeft'; btnMeasure.innerHTML = '📏';
-      L.DomEvent.disableClickPropagation(btnMeasure); L.DomEvent.on(btnMeasure, 'click', function(e) { L.DomEvent.stop(e); toggleMeasureTool(); });
+      btnMeasure.id = 'btnMeasureLeft';
+      btnMeasure.innerHTML = '📏';
+      L.DomEvent.disableClickPropagation(btnMeasure);
+      L.DomEvent.on(btnMeasure, 'click', function(e) { L.DomEvent.stop(e); toggleMeasureTool(); });
       return container;
     }
   });
@@ -696,35 +742,72 @@ function initMap() {
     onAdd: function(map) {
       var container = L.DomUtil.create('div', 'leaflet-control-btn-group');
       var btnMainToggle = L.DomUtil.create('button', 'leaflet-custom-btn btn-toggle-drawer', container);
-      btnMainToggle.id = 'btnToggleToolsDrawer'; btnMainToggle.innerHTML = '🛠️ เครื่องมือ';
-      L.DomEvent.disableClickPropagation(btnMainToggle); L.DomEvent.on(btnMainToggle, 'click', function(e) { L.DomEvent.stop(e); toggleToolsDrawer(); });
+      btnMainToggle.id = 'btnToggleToolsDrawer';
+      btnMainToggle.innerHTML = '🛠️ เครื่องมือ';
+      L.DomEvent.disableClickPropagation(btnMainToggle);
+      L.DomEvent.on(btnMainToggle, 'click', function(e) { L.DomEvent.stop(e); toggleToolsDrawer(); });
 
-      var drawer = L.DomUtil.create('div', 'tools-drawer-content', container); drawer.id = 'toolsDrawerContent';
-      var rotateRow = L.DomUtil.create('div', '', drawer); rotateRow.style.display = 'flex'; rotateRow.style.gap = '6px';
+      var drawer = L.DomUtil.create('div', 'tools-drawer-content', container);
+      drawer.id = 'toolsDrawerContent';
+      var rotateRow = L.DomUtil.create('div', '', drawer);
+      rotateRow.style.display = 'flex';
+      rotateRow.style.gap = '6px';
 
-      var btnRotLeft = L.DomUtil.create('button', 'leaflet-custom-btn', rotateRow); btnRotLeft.innerHTML = '↺ หมุนซ้าย'; btnRotLeft.style.flex = '1';
-      L.DomEvent.disableClickPropagation(btnRotLeft); L.DomEvent.on(btnRotLeft, 'click', function(e) { L.DomEvent.stop(e); rotateMapLeft(); });
+      var btnRotLeft = L.DomUtil.create('button', 'leaflet-custom-btn', rotateRow);
+      btnRotLeft.innerHTML = '↺ หมุนซ้าย';
+      btnRotLeft.style.flex = '1';
+      L.DomEvent.disableClickPropagation(btnRotLeft);
+      L.DomEvent.on(btnRotLeft, 'click', function(e) { L.DomEvent.stop(e); rotateMapLeft(); });
 
-      var btnRotRight = L.DomUtil.create('button', 'leaflet-custom-btn', rotateRow); btnRotRight.innerHTML = 'หมุนขวา ↻'; btnRotRight.style.flex = '1';
-      L.DomEvent.disableClickPropagation(btnRotRight); L.DomEvent.on(btnRotRight, 'click', function(e) { L.DomEvent.stop(e); rotateMapRight(); });
+      var btnRotRight = L.DomUtil.create('button', 'leaflet-custom-btn', rotateRow);
+      btnRotRight.innerHTML = 'หมุนขวา ↻';
+      btnRotRight.style.flex = '1';
+      L.DomEvent.disableClickPropagation(btnRotRight);
+      L.DomEvent.on(btnRotRight, 'click', function(e) { L.DomEvent.stop(e); rotateMapRight(); });
 
-      var btnFine = L.DomUtil.create('button', 'leaflet-custom-btn', drawer); btnFine.id = 'toggleFineBtnInner'; btnFine.innerHTML = '⚙️ ละเอียด 1°: ปิด'; btnFine.style.width = '100%';
-      L.DomEvent.disableClickPropagation(btnFine); L.DomEvent.on(btnFine, 'click', function(e) { L.DomEvent.stop(e); toggleFineRotation(); });
+      var btnFine = L.DomUtil.create('button', 'leaflet-custom-btn', drawer);
+      btnFine.id = 'toggleFineBtnInner';
+      btnFine.innerHTML = '⚙️ ละเอียด 1°: ปิด';
+      btnFine.style.width = '100%';
+      L.DomEvent.disableClickPropagation(btnFine);
+      L.DomEvent.on(btnFine, 'click', function(e) { L.DomEvent.stop(e); toggleFineRotation(); });
 
-      var btnBlueprint = L.DomUtil.create('button', 'leaflet-custom-btn', drawer); btnBlueprint.innerHTML = '📐 แทรกภาพแผนผัง'; btnBlueprint.style.width = '100%';
-      L.DomEvent.disableClickPropagation(btnBlueprint); L.DomEvent.on(btnBlueprint, 'click', function(e) { L.DomEvent.stop(e); triggerBlueprintPicker(); });
+      var btnBlueprint = L.DomUtil.create('button', 'leaflet-custom-btn', drawer);
+      btnBlueprint.innerHTML = '📐 แทรกภาพแผนผัง';
+      btnBlueprint.style.width = '100%';
+      L.DomEvent.disableClickPropagation(btnBlueprint);
+      L.DomEvent.on(btnBlueprint, 'click', function(e) {
+        L.DomEvent.stop(e);
+        triggerBlueprintPicker();
+      });
 
-      var btnSurveyor = L.DomUtil.create('button', 'leaflet-custom-btn', drawer); btnSurveyor.id = 'btnToggleSurveyor'; btnSurveyor.innerHTML = '👷‍♂️ ช่างเดินสำรวจ: เริ่ม'; btnSurveyor.style.width = '100%';
-      L.DomEvent.disableClickPropagation(btnSurveyor); L.DomEvent.on(btnSurveyor, 'click', function(e) { L.DomEvent.stop(e); toggleInspectorSurvey(); });
+      var btnSurveyor = L.DomUtil.create('button', 'leaflet-custom-btn', drawer);
+      btnSurveyor.id = 'btnToggleSurveyor';
+      btnSurveyor.innerHTML = '👷‍♂️ ช่างเดินสำรวจ: เริ่ม';
+      btnSurveyor.style.width = '100%';
+      L.DomEvent.disableClickPropagation(btnSurveyor);
+      L.DomEvent.on(btnSurveyor, 'click', function(e) { L.DomEvent.stop(e); toggleInspectorSurvey(); });
 
-      var btnAsset = L.DomUtil.create('button', 'leaflet-custom-btn layer-active', drawer); btnAsset.id = 'toggleAssetBtnInner'; btnAsset.innerHTML = '📍 หมุดครุภัณฑ์: เปิด'; btnAsset.style.width = '100%';
-      L.DomEvent.disableClickPropagation(btnAsset); L.DomEvent.on(btnAsset, 'click', function(e) { L.DomEvent.stop(e); toggleAssetLayer(); });
+      var btnAsset = L.DomUtil.create('button', 'leaflet-custom-btn layer-active', drawer);
+      btnAsset.id = 'toggleAssetBtnInner';
+      btnAsset.innerHTML = '📍 หมุดครุภัณฑ์: เปิด';
+      btnAsset.style.width = '100%';
+      L.DomEvent.disableClickPropagation(btnAsset);
+      L.DomEvent.on(btnAsset, 'click', function(e) { L.DomEvent.stop(e); toggleAssetLayer(); });
 
-      var btnTarget = L.DomUtil.create('button', 'leaflet-custom-btn active', drawer); btnTarget.id = 'toggleTargetBtnInner'; btnTarget.innerHTML = '🎯 เป้าโฟกัส: เปิด'; btnTarget.style.width = '100%';
-      L.DomEvent.disableClickPropagation(btnTarget); L.DomEvent.on(btnTarget, 'click', function(e) { L.DomEvent.stop(e); toggleCrosshair(); });
+      var btnTarget = L.DomUtil.create('button', 'leaflet-custom-btn active', drawer);
+      btnTarget.id = 'toggleTargetBtnInner';
+      btnTarget.innerHTML = '🎯 เป้าโฟกัส: เปิด';
+      btnTarget.style.width = '100%';
+      L.DomEvent.disableClickPropagation(btnTarget);
+      L.DomEvent.on(btnTarget, 'click', function(e) { L.DomEvent.stop(e); toggleCrosshair(); });
 
-      var btnReset = L.DomUtil.create('button', 'leaflet-custom-btn', drawer); btnReset.id = 'resetViewBtnInner'; btnReset.innerHTML = '🔄 รีเซ็ตมุมมอง'; btnReset.style.width = '100%';
-      L.DomEvent.disableClickPropagation(btnReset); L.DomEvent.on(btnReset, 'click', function(e) { L.DomEvent.stop(e); resetMapView(); });
+      var btnReset = L.DomUtil.create('button', 'leaflet-custom-btn', drawer);
+      btnReset.id = 'resetViewBtnInner';
+      btnReset.innerHTML = '🔄 รีเซ็ตมุมมอง';
+      btnReset.style.width = '100%';
+      L.DomEvent.disableClickPropagation(btnReset);
+      L.DomEvent.on(btnReset, 'click', function(e) { L.DomEvent.stop(e); resetMapView(); });
 
       return container;
     }
@@ -744,8 +827,12 @@ function initMap() {
   measureLayerGroup = new L.FeatureGroup().addTo(map);
 
   markerClusterGroup = L.markerClusterGroup({
-    chunkedLoading: true, maxClusterRadius: 40, disableClusteringAtZoom: 18,
-    spiderfyOnMaxZoom: true, showCoverageOnHover: false, zoomToBoundsOnClick: true
+    chunkedLoading: true,
+    maxClusterRadius: 40,
+    disableClusteringAtZoom: 18,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: true
   }).addTo(map);
 
   drawControl = new L.Control.Draw({
@@ -753,8 +840,12 @@ function initMap() {
     draw: {
       polygon: { allowIntersection: false, shapeOptions: { color: '#10b981', weight: 2.5, fillOpacity: 0.3 } },
       rectangle: { shapeOptions: { color: '#10b981', weight: 2.5, fillOpacity: 0.3 } },
-      marker: { icon: createSvgIcon(selectedPinColor, true) }, circle: false, circlemarker: false, polyline: false
-    }, edit: { featureGroup: drawnItems, remove: true }
+      marker: { icon: createSvgIcon(selectedPinColor, true) },
+      circle: false,
+      circlemarker: false,
+      polyline: false
+    },
+    edit: { featureGroup: drawnItems, remove: true }
   });
   map.addControl(drawControl);
   map.on(L.Draw.Event.CREATED, function(e) { handleFeatureCreated(e.layer, e.layerType); });
