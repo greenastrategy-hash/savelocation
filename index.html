@@ -34,7 +34,7 @@
     📐 เครื่องมือแผนผัง
   </button>
 
-  <!-- แผงควบคุมภาพแผนผังซ้อนทับ (Free Drag, Hide Tools & Aspect Ratio Lock) -->
+  <!-- แผงควบคุมภาพแผนผังซ้อนทับ -->
   <div id="blueprintControlCard">
     <div class="bp-ctrl-header">
       <span>📐 แผงควบคุมภาพแผนผัง</span>
@@ -48,7 +48,6 @@
       </button>
     </div>
 
-    <!-- ตัวเลือกล็อกสัดส่วนตามขนาดภาพจริง -->
     <div style="display: flex; align-items: center; justify-content: space-between; background: #f1f5f9; padding: 6px 10px; border-radius: 8px; margin-bottom: 8px;">
       <span style="font-size: 11.5px; font-weight: 600; color: var(--text-main);">🔒 ล็อกสัดส่วนภาพจริง (1:1):</span>
       <input type="checkbox" id="bpLockAspectCheck" checked onchange="toggleLockAspectRatio()" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;" />
@@ -74,7 +73,6 @@
       <input type="range" class="bp-slider" id="bpAspectRange" min="0.4" max="2.5" step="0.05" value="1.0" oninput="updateBlueprintTransform()">
     </div>
 
-    <!-- ปุ่มเลื่อนพิกัดละเอียด 4 ทิศทาง -->
     <div style="margin-top: 6px;">
       <label style="display:block; margin-bottom:4px; font-weight:600; color:var(--text-sub); font-size:11px;">เลื่อนละเอียด (Nudge):</label>
       <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:4px; max-width: 140px; margin: 0 auto;">
@@ -143,8 +141,12 @@
     </div>
 
     <div class="content-area">
+      <!-- ช่องค้นหาสถานที่ พร้อมปุ่มกากบาท (✕) เคลียร์ข้อความ -->
       <div class="search-row">
-        <input type="text" id="searchInput" class="search-input" placeholder="ค้นหาสถานที่บนแผนที่..." onkeypress="if(event.key==='Enter') searchLocation()" />
+        <div class="search-input-wrapper">
+          <input type="text" id="searchInput" class="search-input" placeholder="ค้นหาสถานที่บนแผนที่..." onkeypress="if(event.key==='Enter') searchLocation()" oninput="toggleClearSearchBtn()" />
+          <button type="button" id="btnClearSearch" class="btn-clear-search" onclick="clearSearchLocation()" title="ล้างข้อความค้นหา">✕</button>
+        </div>
         <button class="btn-action" onclick="searchLocation()">ค้นหา</button>
         <button class="btn-action btn-gps" onclick="locateUser(true)">GPS</button>
       </div>
@@ -289,9 +291,22 @@
           </div>
         </div>
 
-        <div id="coordPreviewBox" class="coord-preview" style="display: none;">
-          <div><b>พิกัด Lat:</b> <span id="prevLat">-</span> | <b>Lng:</b> <span id="prevLng">-</span></div>
-          <div id="areaPreviewText" style="margin-top: 3px; font-weight: 600; color: var(--primary);"></div>
+        <!-- กล่องระบุพิกัด: ปรับให้สามารถพิมพ์แก้ไข Lat/Lng ได้โดยตรง -->
+        <div id="coordPreviewBox" class="coord-preview">
+          <div style="font-weight: 700; margin-bottom: 6px; color: var(--text-main); font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <span>🌐 พิกัดละติจูด - ลองจิจูด (พิมพ์แก้ไขได้)</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div>
+              <label style="font-size: 11px; color: var(--text-sub); display: block; margin-bottom: 3px;">ละติจูด (Lat)</label>
+              <input type="number" step="any" id="inputLat" class="form-control coord-input" placeholder="เช่น 13.7563" oninput="onManualCoordChange()" />
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--text-sub); display: block; margin-bottom: 3px;">ลองจิจูด (Lng)</label>
+              <input type="number" step="any" id="inputLng" class="form-control coord-input" placeholder="เช่น 100.5018" oninput="onManualCoordChange()" />
+            </div>
+          </div>
+          <div id="areaPreviewText" style="margin-top: 5px; font-weight: 600; color: var(--primary); font-size: 11.5px;"></div>
         </div>
 
         <button id="saveBtn" class="btn-save" disabled onclick="saveCurrentData()">บันทึกข้อมูลลง Google Sheet</button>
