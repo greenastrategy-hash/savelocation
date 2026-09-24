@@ -1098,19 +1098,39 @@ function handleLogout() {
   fetchSystemSettings(); loadSavedData(); showToast('ออกจากระบบเรียบร้อยแล้ว');
 }
 
-async function loadSavedData() {
+async function loadSavedData(newSavedLocation) {
   document.getElementById('recordsList').innerHTML = '<p style="font-size:12px;color:#888;text-align:center;">กำลังโหลดข้อมูล...</p>';
   var code = currentSession ? currentSession.deptCode : '';
   try {
     const data = await callGasGet('getSavedPlots', { deptCode: code });
     allSavedPlots = data || [];
     localStorage.setItem('cached_plots', JSON.stringify(allSavedPlots));
-    updateLocationFilterOptions(); applyDataFilters(false);
+    
+    // อัปเดตรายการสถานที่ใน Dropdown
+    updateLocationFilterOptions();
+
+    // ถ้ามีการส่งสถานที่ที่เพิ่งบันทึกมา ให้ปรับ Dropdown ให้ตรงกับสถานที่นั้น หรือแสดงทั้งหมด
+    if (newSavedLocation) {
+      var locSelect = document.getElementById('filterLocationSelect');
+      locSelect.value = newSavedLocation;
+      // ถ้าไม่มีในตัวเลือก ให้กลับไป ALL
+      if (locSelect.value !== newSavedLocation) {
+        locSelect.value = 'ALL';
+      }
+    }
+
+    // สั่งวาดหมุดลงแผนที่
+    applyDataFilters(false);
   } catch(err) {
     var cached = localStorage.getItem('cached_plots');
     if (cached) {
-      allSavedPlots = JSON.parse(cached); updateLocationFilterOptions(); applyDataFilters(false); showToast('⚠️ แสดงข้อมูลแคชในโหมดออฟไลน์');
-    } else { showCustomerAlert('ดึงข้อมูลไม่สำเร็จ', err.toString(), 'error'); }
+      allSavedPlots = JSON.parse(cached); 
+      updateLocationFilterOptions(); 
+      applyDataFilters(false); 
+      showToast('⚠️ แสดงข้อมูลแคชในโหมดออฟไลน์');
+    } else { 
+      showCustomerAlert('ดึงข้อมูลไม่สำเร็จ', err.toString(), 'error'); 
+    }
   }
 }
 
@@ -1462,39 +1482,61 @@ function renderSavedOnMapAndList(data) {
 }
 
 async function saveCurrentData() {
-  if (!currentSession) { showCustomerAlert('แจ้งเตือน', 'กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูล', 'warning', function() { openLoginModal(); }); return; }
-  if (!systemSettings.allowRecord && !currentSession.isAdmin) { showCustomerAlert('ระบบปิดรับข้อมูล', systemSettings.closedMessage, 'warning'); return; }
-
-  var name = document.getElementById('plotName').value.trim();
-  if (!name) { showCustomerAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อครุภัณฑ์ / ทรัพย์สิน', 'warning'); return; }
-  
-  // ตรวจสอบพิกัดจากการพิมพ์โดยตรงหากยังไม่มี Feature
-  var inputLatVal = parseFloat(document.getElementById('inputLat').value);
-  var inputLngVal = parseFloat(document.getElementById('inputLng').value);
-  if (!currentFeatureData && !isNaN(inputLatVal) && !isNaN(inputLngVal)) {
-    currentFeatureData = {
-      type: 'หมุดตำแหน่งครุภัณฑ์',
-      lat: inputLatVal,
-      lng: inputLngVal,
-      boundary: null,
-      areaSqm: 0,
-      areaThai: '-'
-    };
+  if (!currentSession) { 
+    showCustomerAlert('แจ้งเตือน', 'กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูล', 'warning', function() { openLoginModal(); }); 
+    return; 
+  }
+  if (!systemSettings.allowRecord && !currentSession.isAdmin) { 
+    showCustomerAlert('ระบบปิดรับข้อมูล', systemSettings.closedMessage, 'warning'); 
+    return; 
   }
 
-  if (!currentFeatureData) { showCustomerAlert('ยังไม่ได้ระบุพิกัด', 'กรุณากำหนดพิกัดบนแผนที่หรือพิมพ์ระบุพิกัดก่อนบันทึก', 'warning'); return; }
+  var name = document.getElementById('plotName').value.trim();
+  if (!name) { 
+    showCustomerAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อครุภัณฑ์ / ทรัพย์สิน', 'warning'); 
+    return; 
+  }
+
+  // ดึงค่าละติจูดและลองจิจูดจากช่องกรอกพิกัดโดยตรง (ถ้ามีการพิมพ์หรือแก้ไขไว้)
+  var inputLatVal = parseFloat(document.getElementById('inputLat').value);
+  var inputLngVal = parseFloat(document.getElementById('inputLng').value);
+
+  if (!isNaN(inputLatVal) && !isNaN(inputLngVal)) {
+    if (!currentFeatureData) {
+      currentFeatureData = {
+        type: 'หมุดตำแหน่งครุภัณฑ์',
+        lat: inputLatVal,
+        lng: inputLngVal,
+        boundary: null,
+        areaSqm: 0,
+        areaThai: '-'
+      };
+    } else {
+      currentFeatureData.lat = inputLatVal;
+      currentFeatureData.lng = inputLngVal;
+    }
+  }
+
+  if (!currentFeatureData || (!currentFeatureData.lat && !currentFeatureData.boundary)) { 
+    showCustomerAlert('ยังไม่ได้ระบุพิกัด', 'กรุณากำหนดพิกัดบนแผนที่หรือพิมพ์ระบุพิกัดก่อนบันทึก', 'warning'); 
+    return; 
+  }
 
   var saveBtn = document.getElementById('saveBtn');
-  saveBtn.disabled = true; saveBtn.innerText = 'กำลังอัปโหลดและบันทึก...';
+  saveBtn.disabled = true; 
+  saveBtn.innerText = 'กำลังอัปโหลดและบันทึก...';
+
+  var deptCodeSelected = document.getElementById('plotDept').value;
+  var locationVal = document.getElementById('plotLocation').value.trim();
 
   var payload = {
     id: document.getElementById('editId').value || null,
     isEdit: Boolean(document.getElementById('editId').value),
-    deptCode: document.getElementById('plotDept').value,
+    deptCode: deptCodeSelected,
     name: name,
     pinColor: selectedPinColor,
     regNo: document.getElementById('plotRegNo').value.trim(),
-    location: document.getElementById('plotLocation').value.trim(),
+    location: locationVal,
     imageBase64: selectedBase64Image,
     imageUrl: document.getElementById('currentExistingImageUrl').value,
     oldImageUrl: (selectedBase64Image && document.getElementById('currentExistingImageUrl').value) ? document.getElementById('currentExistingImageUrl').value : '',
@@ -1514,11 +1556,30 @@ async function saveCurrentData() {
     const res = await callGasPost('savePlotData', { data: payload });
     showCustomerAlert('ผลการบันทึก', res.message, res.success ? 'success' : 'error');
     saveBtn.innerText = 'บันทึกข้อมูลลง Google Sheet';
-    cancelEditMode(); 
-    loadSavedData();
+    
+    if (res.success) {
+      var savedLat = payload.lat;
+      var savedLng = payload.lng;
+      var savedLoc = payload.location;
+      var savedDept = payload.deptCode;
+
+      // ล้างข้อมูลในฟอร์ม (คงข้อความค้นหาสถานที่ไว้ตามเงื่อนไขเดิม)
+      cancelEditMode(); 
+
+      // โหลดข้อมูลใหม่พร้อมส่งสถานที่และฝ่ายไปอัปเดตตัวกรอง
+      await loadSavedData(savedLoc, savedDept);
+
+      // โฟกัสแผนที่ไปยังหมุดที่เพิ่งบันทึกทันที
+      if (savedLat && savedLng) {
+        map.flyTo([savedLat, savedLng], 19, { animate: true, duration: 0.8 });
+      }
+    } else {
+      saveBtn.disabled = false;
+    }
   } catch (err) {
     showCustomerAlert('บันทึกไม่สำเร็จ', err.toString(), 'error');
-    saveBtn.disabled = false; saveBtn.innerText = 'บันทึกข้อมูลลง Google Sheet';
+    saveBtn.disabled = false; 
+    saveBtn.innerText = 'บันทึกข้อมูลลง Google Sheet';
   }
 }
 
