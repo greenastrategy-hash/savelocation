@@ -1098,7 +1098,7 @@ function handleLogout() {
   fetchSystemSettings(); loadSavedData(); showToast('ออกจากระบบเรียบร้อยแล้ว');
 }
 
-async function loadSavedData(newSavedLocation) {
+async function loadSavedData(newSavedLocation, newSavedDept) {
   document.getElementById('recordsList').innerHTML = '<p style="font-size:12px;color:#888;text-align:center;">กำลังโหลดข้อมูล...</p>';
   var code = currentSession ? currentSession.deptCode : '';
   try {
@@ -1106,20 +1106,25 @@ async function loadSavedData(newSavedLocation) {
     allSavedPlots = data || [];
     localStorage.setItem('cached_plots', JSON.stringify(allSavedPlots));
     
-    // อัปเดตรายการสถานที่ใน Dropdown
+    // หากเพิ่งบันทึกรายการใหม่ ให้ปรับตัวกรองให้ตรงกับรายการนั้นเพื่อไม่ให้ตัวกรองซ่อนหมุด
+    if (newSavedDept && !currentSession.isAdmin) {
+      document.getElementById('filterDeptSelect').value = newSavedDept;
+    } else if (newSavedDept && currentSession.isAdmin) {
+      // แอดมินสามารถเปิดดูทั้งหมดหรือตามฝ่ายที่บันทึก
+      document.getElementById('filterDeptSelect').value = newSavedDept;
+    }
+
     updateLocationFilterOptions();
 
-    // ถ้ามีการส่งสถานที่ที่เพิ่งบันทึกมา ให้ปรับ Dropdown ให้ตรงกับสถานที่นั้น หรือแสดงทั้งหมด
     if (newSavedLocation) {
       var locSelect = document.getElementById('filterLocationSelect');
       locSelect.value = newSavedLocation;
-      // ถ้าไม่มีในตัวเลือก ให้กลับไป ALL
       if (locSelect.value !== newSavedLocation) {
         locSelect.value = 'ALL';
       }
     }
 
-    // สั่งวาดหมุดลงแผนที่
+    // วาดหมุดลงบนแผนที่
     applyDataFilters(false);
   } catch(err) {
     var cached = localStorage.getItem('cached_plots');
