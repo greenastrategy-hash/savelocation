@@ -92,7 +92,100 @@ var greenIcon = createSvgIcon('green', false);
 var redIcon = createSvgIcon('red', false);
 
 /* ============================================================
-   ระบบแทรกภาพแผนผังซ้อนทับ (ปรับ Z-Index ให้อยู่ใต้หมุด)
+   ระบบค้นหา และ การคงชื่อสถานที่
+   ============================================================ */
+function toggleClearSearchBtn() {
+  var query = document.getElementById('searchInput').value.trim();
+  document.getElementById('btnClearSearch').style.display = query ? 'flex' : 'none';
+}
+
+function clearSearchLocation() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('btnClearSearch').style.display = 'none';
+  // เคลียร์ค่าในช่องสถานที่หลักเมื่อกดกากบาท
+  if (!document.getElementById('editId').value) {
+    document.getElementById('plotLocation').value = '';
+  }
+  showToast('ล้างสถานที่ค้นหาแล้ว');
+}
+
+function searchLocation() {
+  var query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+
+  toggleClearSearchBtn();
+  // เก็บข้อความตามที่พิมพ์ค้นหาลงช่องสถานที่ของฟอร์มทันที
+  document.getElementById('plotLocation').value = query;
+
+  var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query);
+  fetch(url)
+    .then(function(res) { return res.json(); })
+    .then(function(results) {
+      if (results && results.length > 0) {
+        var lat = parseFloat(results[0].lat), lon = parseFloat(results[0].lon);
+        map.flyTo([lat, lon], 18);
+        if (window.innerWidth <= 768) toggleMobileSidebar(false);
+        showToast('📍 ระบุสถานที่: ' + query);
+      } else {
+        showToast('ระบุสถานที่: ' + query + ' (ไม่พบพิกัดบนแผนที่)');
+      }
+    }).catch(function() { 
+      showToast('ระบุสถานที่: ' + query); 
+    });
+}
+
+/* ============================================================
+   ระบบพิมพ์แก้ไขพิกัด Lat/Lng ด้วยตนเอง
+   ============================================================ */
+function onManualCoordChange() {
+  var latVal = parseFloat(document.getElementById('inputLat').value);
+  var lngVal = parseFloat(document.getElementById('inputLng').value);
+
+  if (isNaN(latVal) || isNaN(lngVal)) return;
+  if (latVal < -90 || latVal > 90 || lngVal < -180 || lngVal > 180) return;
+
+  // เลื่อนหรือปักหมุดใหม่ตามพิกัดที่พิมพ์
+  if (currentLayer && currentFeatureData && currentFeatureData.type === 'หมุดตำแหน่งครุภัณฑ์') {
+    currentLayer.setLatLng([latVal, lngVal]);
+  } else {
+    drawnItems.clearLayers();
+    var animIcon = createSvgIcon(selectedPinColor, false);
+    currentLayer = L.marker([latVal, lngVal], {
+      icon: animIcon,
+      draggable: true,
+      zIndexOffset: 1500
+    }).addTo(drawnItems);
+
+    currentLayer.on('dragend', function(e) {
+      var p = e.target.getLatLng();
+      currentFeatureData.lat = p.lat;
+      currentFeatureData.lng = p.lng;
+      document.getElementById('inputLat').value = p.lat.toFixed(6);
+      document.getElementById('inputLng').value = p.lng.toFixed(6);
+    });
+  }
+
+  currentFeatureData = {
+    type: 'หมุดตำแหน่งครุภัณฑ์',
+    lat: latVal,
+    lng: lngVal,
+    boundary: null,
+    areaSqm: 0,
+    areaThai: '-'
+  };
+
+  document.getElementById('shapeStatus').innerText = 'กำหนดพิกัดจากการพิมพ์ระบุ';
+  document.getElementById('areaPreviewText').innerText = '';
+
+  if (currentSession) {
+    document.getElementById('saveBtn').disabled = (!systemSettings.allowRecord && !currentSession.isAdmin);
+  }
+
+  map.panTo([latVal, lngVal]);
+}
+
+/* ============================================================
+   ระบบแทรกภาพแผนผังซ้อนทับ
    ============================================================ */
 function triggerBlueprintPicker() {
   document.getElementById('blueprintFileInput').click();
@@ -215,7 +308,7 @@ function applyBlueprintRotationCSS() {
   var el = blueprintLayer.getElement();
   if (el) {
     el.style.transformOrigin = '50% 50%';
-    el.style.pointerEvents = 'none'; // ให้คลิกทะลุภาพไปโดนหมุดได้
+    el.style.pointerEvents = 'none';
     var baseTransform = el.style.transform.replace(/\s*rotate\([^)]*\)/g, '');
     el.style.transform = baseTransform + ' rotate(' + currentBlueprintRotation + 'deg)';
   }
@@ -247,7 +340,6 @@ function renderBlueprintOverlay(isDragging) {
     [se.geometry.coordinates[1], se.geometry.coordinates[0]]
   ];
 
-  // ปรับ zIndex เป็น 1 ให้อยู่ใต้หมุด Marker เสมอ
   blueprintLayer = L.imageOverlay(blueprintImageSrc, bounds, { 
     opacity: opacity, 
     interactive: false, 
@@ -396,7 +488,7 @@ function handleDirectFileSelect(event, type) {
         selectedBase64Qr = base64;
         document.getElementById('qrPreviewImg').src = base64;
         document.getElementById('qrPreviewWrap').style.display = 'block';
-        document.getElementById('photoPlaceholderText').style.display = 'none';
+        document.getElementById('qrPlaceholderText').style.display = 'none';
         showToast('เลือกภาพ QR Code เรียบร้อย');
       }
     };
@@ -658,32 +750,20 @@ function toggleMobileSidebar(forceState) {
 }
 
 function initMap() {
-  // 1. ภาพถ่ายดาวเทียมความคมชัดสูง (Esri Clean)
   var esriClean = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 22,
-    maxNativeZoom: 19,
-    attribution: 'Tiles &copy; Esri'
+    maxZoom: 22, maxNativeZoom: 19, attribution: 'Tiles &copy; Esri'
   });
 
-  // 2. ภาพถ่ายดาวเทียมพร้อมเส้นถนน (Google Hybrid)
   var googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-    maxZoom: 22,
-    maxNativeZoom: 21,
-    attribution: '&copy; Google Maps'
+    maxZoom: 22, maxNativeZoom: 21, attribution: '&copy; Google Maps'
   });
 
-  // 3. แผนที่ลายเส้นโทนสว่าง (Esri Light Gray Canvas - ฟรี ไม่ติด API Key)
   var esriLight = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 22,
-    maxNativeZoom: 16,
-    attribution: 'Tiles &copy; Esri'
+    maxZoom: 22, maxNativeZoom: 16, attribution: 'Tiles &copy; Esri'
   });
 
-  // 4. แผนที่มาตรฐาน OpenStreetMap (OSM)
   var osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 22,
-    maxNativeZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+    maxZoom: 22, maxNativeZoom: 19, attribution: '&copy; OpenStreetMap contributors'
   });
 
   map = L.map('map', {
@@ -693,7 +773,7 @@ function initMap() {
     zoomSnap: 0.25,
     zoomDelta: 0.5,
     wheelPxPerZoomLevel: 120,
-    layers: [esriClean], // ตั้งค่าเริ่มต้นเป็นภาพถ่ายดาวเทียม
+    layers: [esriClean],
     zoomControl: false,
     rotate: true,
     bearing: 0,
@@ -708,7 +788,6 @@ function initMap() {
 
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  // รายการสลับชั้นแผนที่ (ตัดชั้นที่มีปัญหา API Key ออกแล้ว)
   var baseMaps = {
     "🛰️ ดาวเทียมธรรมชาติ (Esri Clean)": esriClean,
     "🛰️ ดาวเทียม + ถนน (Google Hybrid)": googleHybrid,
@@ -776,10 +855,7 @@ function initMap() {
       btnBlueprint.innerHTML = '📐 แทรกภาพแผนผัง';
       btnBlueprint.style.width = '100%';
       L.DomEvent.disableClickPropagation(btnBlueprint);
-      L.DomEvent.on(btnBlueprint, 'click', function(e) {
-        L.DomEvent.stop(e);
-        triggerBlueprintPicker();
-      });
+      L.DomEvent.on(btnBlueprint, 'click', function(e) { L.DomEvent.stop(e); triggerBlueprintPicker(); });
 
       var btnSurveyor = L.DomUtil.create('button', 'leaflet-custom-btn', drawer);
       btnSurveyor.id = 'btnToggleSurveyor';
@@ -900,17 +976,18 @@ function handleFeatureCreated(layer, layerType) {
       currentLayer.on('dragend', function(evt) {
         var pos = evt.target.getLatLng();
         currentFeatureData.lat = pos.lat; currentFeatureData.lng = pos.lng;
-        document.getElementById('prevLat').innerText = pos.lat.toFixed(6);
-        document.getElementById('prevLng').innerText = pos.lng.toFixed(6);
+        document.getElementById('inputLat').value = pos.lat.toFixed(6);
+        document.getElementById('inputLng').value = pos.lng.toFixed(6);
         showToast('อัปเดตพิกัดจากการเลื่อนแล้ว');
       });
     }
   }
 
   currentFeatureData = { type: type, lat: lat, lng: lng, boundary: (type === 'แปลงพื้นที่') ? geojson.geometry.coordinates : null, areaSqm: areaSqm, areaThai: areaThai };
-  document.getElementById('prevLat').innerText = lat.toFixed(6);
-  document.getElementById('prevLng').innerText = lng.toFixed(6);
-  document.getElementById('coordPreviewBox').style.display = 'block';
+  
+  // อัปเดตค่าเข้าสู่ช่องกรอกพิกัด
+  document.getElementById('inputLat').value = lat.toFixed(6);
+  document.getElementById('inputLng').value = lng.toFixed(6);
   document.getElementById('shapeStatus').innerText = 'กำหนดพิกัดแล้ว (' + type + ')';
   
   if (currentSession) {
@@ -932,15 +1009,16 @@ function setMarkerAtCoords(lat, lng, statusText, animate) {
   marker.on('dragend', function(e) {
     var p = e.target.getLatLng();
     currentFeatureData.lat = p.lat; currentFeatureData.lng = p.lng;
-    document.getElementById('prevLat').innerText = p.lat.toFixed(6);
-    document.getElementById('prevLng').innerText = p.lng.toFixed(6);
+    document.getElementById('inputLat').value = p.lat.toFixed(6);
+    document.getElementById('inputLng').value = p.lng.toFixed(6);
   });
 
   currentFeatureData = { type: 'หมุดตำแหน่งครุภัณฑ์', lat: lat, lng: lng, boundary: null, areaSqm: 0, areaThai: '-' };
-  document.getElementById('prevLat').innerText = lat.toFixed(6);
-  document.getElementById('prevLng').innerText = lng.toFixed(6);
+  
+  // แสดงพิกัดในช่อง Input
+  document.getElementById('inputLat').value = lat.toFixed(6);
+  document.getElementById('inputLng').value = lng.toFixed(6);
   document.getElementById('areaPreviewText').innerText = '';
-  document.getElementById('coordPreviewBox').style.display = 'block';
   document.getElementById('shapeStatus').innerText = statusText || 'พิกัดหมุด (ลากย้ายได้)';
   
   if (currentSession) document.getElementById('saveBtn').disabled = (!systemSettings.allowRecord && !currentSession.isAdmin);
@@ -1306,7 +1384,6 @@ function renderSavedOnMapAndList(data) {
         geoLayer = L.geoJSON({ "type": "Feature", "geometry": { "type": "Polygon", "coordinates": item.boundary } }, { style: { color: '#10b981', weight: 2.5, fillOpacity: 0.35 } });
         geoLayer.bindTooltip('<b>' + (item.name || 'แปลงพื้นที่') + '</b> (' + item.status + ')', { direction: 'center', sticky: true });
       } else if (item.lat && item.lng) {
-        // กำหนด zIndexOffset ให้หมุดลอยอยู่เหนือภาพแผนผัง
         geoLayer = L.marker([item.lat, item.lng], { icon: icon, zIndexOffset: 1000 });
         geoLayer.bindTooltip('<b>' + (item.name || 'ครุภัณฑ์') + '</b>', { direction: 'top', offset: [0, -36], permanent: false });
       }
@@ -1390,7 +1467,22 @@ async function saveCurrentData() {
 
   var name = document.getElementById('plotName').value.trim();
   if (!name) { showCustomerAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อครุภัณฑ์ / ทรัพย์สิน', 'warning'); return; }
-  if (!currentFeatureData) { showCustomerAlert('ยังไม่ได้ระบุพิกัด', 'กรุณากำหนดพิกัดบนแผนที่ก่อนบันทึก', 'warning'); return; }
+  
+  // ตรวจสอบพิกัดจากการพิมพ์โดยตรงหากยังไม่มี Feature
+  var inputLatVal = parseFloat(document.getElementById('inputLat').value);
+  var inputLngVal = parseFloat(document.getElementById('inputLng').value);
+  if (!currentFeatureData && !isNaN(inputLatVal) && !isNaN(inputLngVal)) {
+    currentFeatureData = {
+      type: 'หมุดตำแหน่งครุภัณฑ์',
+      lat: inputLatVal,
+      lng: inputLngVal,
+      boundary: null,
+      areaSqm: 0,
+      areaThai: '-'
+    };
+  }
+
+  if (!currentFeatureData) { showCustomerAlert('ยังไม่ได้ระบุพิกัด', 'กรุณากำหนดพิกัดบนแผนที่หรือพิมพ์ระบุพิกัดก่อนบันทึก', 'warning'); return; }
 
   var saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true; saveBtn.innerText = 'กำลังอัปโหลดและบันทึก...';
@@ -1410,15 +1502,20 @@ async function saveCurrentData() {
     qrUrl: document.getElementById('currentExistingQrUrl').value,
     oldQrUrl: (selectedBase64Qr && document.getElementById('currentExistingQrUrl').value) ? document.getElementById('currentExistingQrUrl').value : '',
     status: document.querySelector('input[name="plotStatus"]:checked').value,
-    type: currentFeatureData.type, lat: currentFeatureData.lat, lng: currentFeatureData.lng,
-    boundary: currentFeatureData.boundary, areaSqm: currentFeatureData.areaSqm, areaThai: currentFeatureData.areaThai
+    type: currentFeatureData.type,
+    lat: currentFeatureData.lat,
+    lng: currentFeatureData.lng,
+    boundary: currentFeatureData.boundary,
+    areaSqm: currentFeatureData.areaSqm,
+    areaThai: currentFeatureData.areaThai
   };
 
   try {
     const res = await callGasPost('savePlotData', { data: payload });
     showCustomerAlert('ผลการบันทึก', res.message, res.success ? 'success' : 'error');
     saveBtn.innerText = 'บันทึกข้อมูลลง Google Sheet';
-    cancelEditMode(); loadSavedData();
+    cancelEditMode(); 
+    loadSavedData();
   } catch (err) {
     showCustomerAlert('บันทึกไม่สำเร็จ', err.toString(), 'error');
     saveBtn.disabled = false; saveBtn.innerText = 'บันทึกข้อมูลลง Google Sheet';
@@ -1457,9 +1554,10 @@ function startEditItem(id) {
   for (var i = 0; i < radios.length; i++) { if (radios[i].value === item.status) radios[i].checked = true; }
 
   currentFeatureData = { type: item.type, lat: item.lat, lng: item.lng, boundary: item.boundary, areaSqm: item.areaSqm, areaThai: item.areaThai };
-  document.getElementById('prevLat').innerText = item.lat ? item.lat.toFixed(6) : '-';
-  document.getElementById('prevLng').innerText = item.lng ? item.lng.toFixed(6) : '-';
-  document.getElementById('coordPreviewBox').style.display = 'block';
+  
+  // อัปเดตพิกัดลงช่องกรอก
+  document.getElementById('inputLat').value = item.lat ? item.lat.toFixed(6) : '';
+  document.getElementById('inputLng').value = item.lng ? item.lng.toFixed(6) : '';
   document.getElementById('areaPreviewText').innerText = (item.type === 'แปลงพื้นที่') ? ('ขนาดพื้นที่: ' + item.areaThai) : '';
 
   drawnItems.clearLayers();
@@ -1468,12 +1566,12 @@ function startEditItem(id) {
     marker.on('dragend', function(e) {
       var pos = e.target.getLatLng();
       currentFeatureData.lat = pos.lat; currentFeatureData.lng = pos.lng;
-      document.getElementById('prevLat').innerText = pos.lat.toFixed(6);
-      document.getElementById('prevLng').innerText = pos.lng.toFixed(6);
+      document.getElementById('inputLat').value = pos.lat.toFixed(6);
+      document.getElementById('inputLng').value = pos.lng.toFixed(6);
       showToast('เลื่อนตำแหน่งไปยังพิกัดใหม่แล้ว');
     });
     map.flyTo([item.lat, item.lng], 20);
-    document.getElementById('shapeStatus').innerText = 'สามารถคลิกลากย้ายหมุดได้';
+    document.getElementById('shapeStatus').innerText = 'สามารถคลิกลากย้ายหมุดหรือพิมพ์แก้พิกัดได้';
   } else if (item.type === 'แปลงพื้นที่' && item.boundary) {
     var poly = L.geoJSON({ "type": "Feature", "geometry": { "type": "Polygon", "coordinates": item.boundary } }, { style: { color: '#f59e0b', weight: 3, fillOpacity: 0.4 } });
     poly.eachLayer(function(l) { drawnItems.addLayer(l); });
@@ -1492,10 +1590,19 @@ function cancelEditMode() {
   document.getElementById('formTitle').innerText = 'ข้อมูลรายการใหม่';
   document.getElementById('plotName').value = '';
   document.getElementById('plotRegNo').value = '';
-  document.getElementById('plotLocation').value = '';
+  
+  // คงชื่อสถานที่ที่ค้นหาค้างไว้ตลอดจนกว่าผู้ใช้จะกดปุ่มกากบาท (✕)
+  var searchedLocation = document.getElementById('searchInput').value.trim();
+  document.getElementById('plotLocation').value = searchedLocation || '';
+
   selectPinColor('green');
   document.getElementById('shapeStatus').innerText = 'ยังไม่ได้กำหนดพิกัด';
-  document.getElementById('coordPreviewBox').style.display = 'none';
+  
+  // ล้างค่าในช่องกรอกพิกัด
+  document.getElementById('inputLat').value = '';
+  document.getElementById('inputLng').value = '';
+  document.getElementById('areaPreviewText').innerText = '';
+
   document.getElementById('saveBtn').disabled = true;
   document.getElementById('cancelEditBtn').style.display = 'none';
   removePhoto(null, 'photo'); removePhoto(null, 'qr');
@@ -1512,31 +1619,6 @@ function deleteItemWithAnim(id, btnElement) {
       cancelEditMode(); loadSavedData();
     } catch (err) { showCustomerAlert('เกิดข้อผิดพลาด', err.toString(), 'error'); }
   });
-}
-
-// ค้นหาสถานที่และเก็บข้อความตามที่พิมพ์ค้นหาลงช่องสถานที่ของฟอร์มทันที
-function searchLocation() {
-  var query = document.getElementById('searchInput').value.trim();
-  if (!query) return;
-
-  // เก็บข้อความตามที่พิมพ์ค้นหาลงช่องสถานที่ของฟอร์มทันที
-  document.getElementById('plotLocation').value = query;
-
-  var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query);
-  fetch(url)
-    .then(function(res) { return res.json(); })
-    .then(function(results) {
-      if (results && results.length > 0) {
-        var lat = parseFloat(results[0].lat), lon = parseFloat(results[0].lon);
-        map.flyTo([lat, lon], 18);
-        if (window.innerWidth <= 768) toggleMobileSidebar(false);
-        showToast('📍 ระบุสถานที่: ' + query);
-      } else {
-        showToast('ระบุสถานที่: ' + query + ' (ไม่พบพิกัดบนแผนที่)');
-      }
-    }).catch(function() { 
-      showToast('ระบุสถานที่: ' + query); 
-    });
 }
 
 function locateUser(fly) {
